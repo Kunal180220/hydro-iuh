@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HydroIUH v3 — Global Distributed Hydrological Model</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap');
+:root{--bg:#060b12;--panel:#0d1520;--border:#1a2840;--accent:#00d4ff;--accent2:#ff6b35;--accent3:#39ff14;--accent4:#a78bfa;--text:#e2e8f0;--muted:#4a6080;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Space Mono',monospace;height:100vh;overflow:hidden;}
+header{height:50px;border-bottom:1px solid var(--border);padding:0 18px;display:flex;align-items:center;gap:14px;background:linear-gradient(90deg,#060b12,#0a1628);position:relative;z-index:1000;}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:1.2rem;letter-spacing:-.02em;}
+.logo span{color:var(--accent);}
+.tagline{font-size:.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;border-left:1px solid var(--border);padding-left:14px;}
+.hstatus{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:.6rem;color:var(--muted);}
+.sdot{width:6px;height:6px;border-radius:50%;background:var(--accent3);box-shadow:0 0 6px var(--accent3);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* TOOLBAR */
+.toolbar{height:42px;border-bottom:1px solid var(--border);background:var(--panel);display:flex;align-items:center;gap:5px;padding:0 12px;overflow-x:auto;flex-shrink:0;}
+.toolbar::-webkit-scrollbar{height:0;}
+.tb-btn{padding:4px 10px;font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);background:transparent;font-family:'Space Mono',monospace;transition:all .15s;white-space:nowrap;}
+.tb-btn:hover,.tb-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,.08);}
+.tb-inp{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.6rem;padding:3px 8px;border-radius:4px;outline:none;height:26px;}
+.tb-inp:focus{border-color:var(--accent);}
+.tb-sep{width:1px;height:18px;background:var(--border);flex-shrink:0;}
+.tb-sel{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.58rem;padding:2px 4px;border-radius:4px;height:26px;}
+
+/* LAYOUT */
+.layout{display:grid;grid-template-columns:245px 1fr 285px;height:calc(100vh - 50px - 42px);}
+
+/* SIDEBAR */
+.sidebar{border-right:1px solid var(--border);overflow-y:auto;padding:11px;display:flex;flex-direction:column;gap:9px;background:var(--panel);}
+.sidebar::-webkit-scrollbar{width:3px;}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border);}
+.slabel{font-size:.56rem;text-transform:uppercase;letter-spacing:.14em;color:var(--accent);margin-bottom:5px;padding-bottom:3px;border-bottom:1px solid var(--border);}
+.card{background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:9px;}
+.prow{display:flex;flex-direction:column;gap:2px;margin-bottom:7px;}
+.plabel{display:flex;justify-content:space-between;font-size:.57rem;color:var(--muted);}
+.pval{color:var(--accent);font-weight:700;}
+input[type=range]{width:100%;-webkit-appearance:none;height:2px;background:var(--border);border-radius:2px;outline:none;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 4px var(--accent);}
+.btn{width:100%;padding:7px;background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:'Space Mono',monospace;font-size:.6rem;text-transform:uppercase;letter-spacing:.07em;cursor:pointer;border-radius:4px;transition:all .18s;}
+.btn:hover{background:var(--accent);color:var(--bg);}
+.btn.primary{background:var(--accent);color:var(--bg);}
+.btn.orange{border-color:var(--accent2);color:var(--accent2);}
+.btn.orange:hover{background:var(--accent2);color:var(--bg);}
+.btn.sm{font-size:.56rem;padding:4px 7px;width:auto;}
+.btn:disabled{opacity:.3;cursor:not-allowed;}
+select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.58rem;padding:4px;border-radius:4px;}
+textarea{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:.55rem;padding:5px;border-radius:4px;resize:vertical;}
+.pstep{display:flex;align-items:center;gap:6px;font-size:.58rem;padding:4px 6px;border-radius:3px;border:1px solid var(--border);transition:all .3s;margin-bottom:3px;}
+.pstep.done{border-color:var(--accent3);color:var(--accent3);}
+.pstep.active{border-color:var(--accent);color:var(--accent);animation:blink .8s infinite;}
+.pstep.pending{color:var(--muted);}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+.prog-bar{height:2px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:3px;}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent3));transition:width .4s;width:0%;}
+
+/* MAIN MAP */
+.main{display:flex;flex-direction:column;overflow:hidden;position:relative;}
+#map-container{flex:1;position:relative;overflow:hidden;}
+#map{width:100%;height:100%;}
+
+/* Overlay opacity control */
+.opa-ctrl{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:500;background:rgba(6,11,18,.88);border:1px solid var(--border);border-radius:20px;padding:5px 14px;display:flex;align-items:center;gap:9px;font-size:.58rem;color:var(--muted);pointer-events:all;}
+.opa-ctrl input[type=range]{width:85px;height:2px;}
+
+/* Info pill */
+.info-pill{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:rgba(6,11,18,.88);border:1px solid var(--border);border-radius:18px;padding:4px 14px;font-size:.58rem;color:var(--accent);pointer-events:none;white-space:nowrap;max-width:90%;}
+
+/* HYDROGRAPH */
+.hydro-area{height:205px;border-top:1px solid var(--border);padding:8px 12px;background:var(--bg);flex-shrink:0;}
+.hydro-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+.hleg-row{display:flex;gap:9px;}
+.hleg{display:flex;align-items:center;gap:3px;font-size:.55rem;color:var(--muted);}
+.hleg-dot{width:10px;height:2px;border-radius:1px;}
+#hydro-canvas{width:100%;height:calc(100% - 20px);display:block;}
+
+/* RIGHT PANEL */
+.rpanel{border-left:1px solid var(--border);overflow-y:auto;background:var(--panel);display:flex;flex-direction:column;}
+.rpanel::-webkit-scrollbar{width:3px;}
+.rpanel::-webkit-scrollbar-thumb{background:var(--border);}
+.rps{padding:10px 12px;border-bottom:1px solid var(--border);}
+.rain-bars{display:flex;gap:2px;align-items:flex-end;height:56px;}
+.rain-col{display:flex;flex-direction:column;align-items:center;flex:1;height:100%;justify-content:flex-end;gap:1px;}
+.rain-bar{width:100%;background:var(--accent);border-radius:2px 2px 0 0;min-height:2px;opacity:.7;}
+.rain-val{font-size:.45rem;color:var(--accent);text-align:center;width:100%;}
+.rain-inps{display:grid;grid-template-columns:repeat(6,1fr);gap:2px;margin-top:4px;}
+.rinp{background:var(--bg);border:1px solid var(--border);color:var(--accent);font-family:'Space Mono',monospace;font-size:.5rem;padding:2px;border-radius:2px;text-align:center;width:100%;}
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:6px;}
+.metric{background:var(--bg);border:1px solid var(--border);padding:6px;border-radius:4px;}
+.mlabel{font-size:.48rem;color:var(--muted);margin-bottom:1px;}
+.mval{font-size:.85rem;font-family:'Syne',sans-serif;font-weight:700;color:var(--accent);}
+.munit{font-size:.46rem;color:var(--muted);}
+#iuh-canvas{width:100%;height:62px;display:block;margin-top:4px;}
+.coord{font-size:.58rem;color:var(--accent2);margin-top:3px;line-height:1.7;white-space:pre-wrap;}
+.upload-zone{border:1px dashed var(--border);border-radius:4px;padding:5px 10px;font-size:.58rem;color:var(--muted);cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+.upload-zone:hover{border-color:var(--accent);color:var(--accent);}
+.upload-zone input[type=file]{display:none;}
+
+/* Outlet marker */
+.outlet-dot{width:14px;height:14px;border-radius:50%;background:#ff6b35;border:2.5px solid #fff;box-shadow:0 0 10px rgba(255,107,53,.9);}
+
+/* Toast */
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#0d1520;border:1px solid var(--accent);color:var(--accent);font-size:.62rem;padding:7px 18px;border-radius:18px;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;}
+.toast.show{opacity:1;}
+
+/* Loading */
+.loading-ov{position:fixed;inset:0;background:rgba(6,11,18,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:5000;opacity:0;pointer-events:none;transition:opacity .25s;}
+.loading-ov.show{opacity:1;pointer-events:all;}
+.spinner{width:34px;height:34px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-bottom:12px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.lmsg{font-size:.72rem;color:var(--accent);}
+.lsub{font-size:.56rem;color:var(--muted);margin-top:3px;}
+
+/* Leaflet overrides */
+.leaflet-control-zoom{border:1px solid var(--border)!important;background:rgba(6,11,18,.9)!important;}
+.leaflet-control-zoom a{background:rgba(6,11,18,.9)!important;color:var(--accent)!important;border-bottom:1px solid var(--border)!important;}
+.leaflet-control-zoom a:hover{background:rgba(0,212,255,.15)!important;}
+.leaflet-control-attribution{background:rgba(6,11,18,.7)!important;color:var(--muted)!important;font-size:.5rem!important;}
+.leaflet-control-attribution a{color:var(--accent)!important;}
+.leaflet-popup-content-wrapper{background:var(--panel)!important;border:1px solid var(--border)!important;color:var(--text)!important;font-family:'Space Mono',monospace!important;font-size:.62rem!important;border-radius:6px!important;}
+.leaflet-popup-tip{background:var(--panel)!important;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Hydro<span>IUH</span> <span style="font-size:.65rem;color:var(--accent4);font-weight:400;">v3</span></div>
+  <div class="tagline">Global Distributed Hydrological Model · Leaflet + IUH Convolution</div>
+  <div class="hstatus"><div class="sdot"></div><span id="status-txt">READY</span></div>
+</header>
+
+<div class="toolbar">
+  <input class="tb-inp" id="loc-input" placeholder="🌍 Search location (e.g. Toowoomba, Australia)" style="width:240px;" onkeydown="if(event.key==='Enter')searchLoc()"/>
+  <button class="tb-btn active" onclick="searchLoc()">Go</button>
+  <div class="tb-sep"></div>
+  <input class="tb-inp" id="ot-key" placeholder="OpenTopography API Key" type="password" style="width:175px;"/>
+  <select class="tb-sel" id="dem-src">
+    <option value="SRTMGL1">SRTM 30m</option>
+    <option value="SRTMGL3">SRTM 90m</option>
+    <option value="COP30">Copernicus 30m</option>
+    <option value="AW3D30">ALOS 30m</option>
+  </select>
+  <button class="tb-btn" onclick="fetchDEM()">⬇ Fetch DEM</button>
+  <div class="tb-sep"></div>
+  <label class="tb-btn" style="cursor:pointer;">📁 GeoTIFF<input type="file" accept=".tif,.tiff" style="display:none" onchange="loadTIFF(this)"/></label>
+  <label class="tb-btn" style="cursor:pointer;">📄 ASCII Grid<input type="file" accept=".asc,.txt" style="display:none" onchange="loadASC(this)"/></label>
+  <button class="tb-btn" onclick="runSynth()">🧪 Synthetic</button>
+  <div class="tb-sep"></div>
+  <select class="tb-sel" id="tile-sel" onchange="switchTiles(this.value)">
+    <option value="dark">Dark (CartoDB)</option>
+    <option value="osm">OpenStreetMap</option>
+    <option value="topo">Topo Map</option>
+    <option value="sat">Satellite</option>
+  </select>
+</div>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="slabel">Terrain (Synthetic)</div>
+    <div class="card">
+      <div class="prow"><div class="plabel"><span>Grid Size</span><span class="pval" id="lbl-grid">60×60</span></div><input type="range" id="sl-grid" min="30" max="100" value="60" step="10" oninput="sv(this,'grid',v=>`${v}×${v}`)"></div>
+      <div class="prow"><div class="plabel"><span>Cell Size (m)</span><span class="pval" id="lbl-cell">250</span></div><input type="range" id="sl-cell" min="50" max="2000" value="250" step="50" oninput="sv(this,'cellSize')"></div>
+      <div class="prow"><div class="plabel"><span>Roughness</span><span class="pval" id="lbl-rough">0.6</span></div><input type="range" id="sl-rough" min="0.1" max="1.0" value="0.6" step="0.1" oninput="sv(this,'roughness')"></div>
+      <div class="prow"><div class="plabel"><span>Seed</span><span class="pval" id="lbl-seed">42</span></div><input type="range" id="sl-seed" min="1" max="200" value="42" oninput="sv(this,'seed')"></div>
+      <button class="btn primary" onclick="runSynth()">⚡ Generate Synthetic DEM</button>
+    </div>
+
+    <div class="slabel">Model Parameters</div>
+    <div class="card">
+      <div class="prow"><div class="plabel"><span>Manning's n</span><span class="pval" id="lbl-n">0.035</span></div><input type="range" id="sl-n" min="0.01" max="0.15" value="0.035" step="0.005" oninput="sv(this,'manN');if(S.done)recompute()"></div>
+      <div class="prow"><div class="plabel"><span>Maidment K</span><span class="pval" id="lbl-k">1.0</span></div><input type="range" id="sl-k" min="0.2" max="3.0" value="1.0" step="0.1" oninput="sv(this,'velK');if(S.done)recompute()"></div>
+      <div class="prow"><div class="plabel"><span>Runoff Coeff.</span><span class="pval" id="lbl-rc">0.65</span></div><input type="range" id="sl-rc" min="0.05" max="1.0" value="0.65" step="0.05" oninput="sv(this,'runoff');if(S.done&&S.selR>=0)computeHydro()"></div>
+      <div class="prow"><div class="plabel"><span>Time Step (min)</span><span class="pval" id="lbl-dt">30</span></div><input type="range" id="sl-dt" min="5" max="120" value="30" step="5" oninput="sv(this,'dt');if(S.done&&S.selR>=0)computeHydro()"></div>
+    </div>
+
+    <div class="slabel">Overlay Layer</div>
+    <select id="view-sel" onchange="S.view=this.value;updateOverlay()">
+      <option value="elevation">Elevation + Hillshade</option>
+      <option value="flowacc">Flow Accumulation</option>
+      <option value="flowdir">Flow Direction (D8)</option>
+      <option value="traveltime">Travel Time</option>
+      <option value="velocity">Cell Velocity</option>
+      <option value="catchment">Catchment Mask</option>
+    </select>
+
+    <div class="slabel">Processing Pipeline</div>
+    <div id="pipeline">
+      <div class="pstep pending" id="ps-dem"><span>◻</span> Load / Generate DEM</div>
+      <div class="pstep pending" id="ps-fill"><span>◻</span> Fill Depressions</div>
+      <div class="pstep pending" id="ps-fdir"><span>◻</span> Flow Directions (D8)</div>
+      <div class="pstep pending" id="ps-facc"><span>◻</span> Flow Accumulation</div>
+      <div class="pstep pending" id="ps-vel"><span>◻</span> Maidment Velocity</div>
+      <div class="pstep pending" id="ps-tt"><span>◻</span> Travel Times</div>
+      <div class="pstep pending" id="ps-iuh"><span>◻</span> Derive IUH</div>
+    </div>
+    <div class="prog-bar"><div class="prog-fill" id="prog"></div></div>
+
+    <div class="slabel" style="margin-top:3px;">Export</div>
+    <div style="display:flex;gap:4px;">
+      <button class="btn sm" style="flex:1;border-color:var(--accent4);color:var(--accent4);" onclick="exportCSV()">↓ Hydrograph CSV</button>
+      <button class="btn sm" style="flex:1;" onclick="exportIUH()">↓ IUH CSV</button>
+    </div>
+  </div>
+
+  <!-- MAIN: Map + Hydrograph -->
+  <div class="main">
+    <div id="map-container">
+      <div id="map"></div>
+      <div class="info-pill" id="info-pill">🌍 Search a location or click 🧪 Synthetic to load a DEM</div>
+      <div class="opa-ctrl" id="opa-ctrl" style="display:none;">
+        <span>Overlay Opacity</span>
+        <input type="range" id="sl-opa" min="0" max="100" value="75" oninput="setOverlayOpacity(this.value)">
+        <span id="opa-lbl">75%</span>
+      </div>
+    </div>
+    <div class="hydro-area">
+      <div class="hydro-top">
+        <div class="slabel" style="margin:0;border:none;padding:0;font-size:.56rem;">DISCHARGE HYDROGRAPH <span id="outlet-lbl" style="color:var(--muted);font-weight:400;font-size:.52rem;"></span></div>
+        <div class="hleg-row">
+          <div class="hleg"><div class="hleg-dot" style="background:var(--accent)"></div>Computed Q</div>
+          <div class="hleg"><div class="hleg-dot" style="background:var(--accent2)"></div>Observed</div>
+          <div class="hleg"><div class="hleg-dot" style="background:var(--accent3);opacity:.6;"></div>Rainfall</div>
+        </div>
+      </div>
+      <canvas id="hydro-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="rpanel">
+    <div class="rps">
+      <div class="slabel">Rainfall Input</div>
+      <div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:6px;">
+        <button class="btn sm" onclick="loadPreset('toowoomba')">Toowoomba 2011</button>
+        <button class="btn sm" onclick="loadPreset('design')">Design Storm</button>
+        <button class="btn sm" onclick="loadPreset('uniform')">Uniform</button>
+        <button class="btn sm orange" onclick="clearRain()">Clear</button>
+      </div>
+      <div class="rain-bars" id="rain-bars"></div>
+      <div class="rain-inps" id="rain-inps"></div>
+      <div style="margin-top:7px;">
+        <label class="upload-zone"><input type="file" accept=".csv,.txt" onchange="loadRainFile(this)">📂 Upload Rainfall CSV (time_hr, mm/hr)</label>
+        <textarea id="rain-paste" rows="3" placeholder="Or paste CSV:&#10;time_hr,mmhr&#10;0,0&#10;1,45&#10;2,120"></textarea>
+        <button class="btn sm" style="width:100%;margin-top:3px;" onclick="applyRainPaste()">Apply CSV</button>
+      </div>
+    </div>
+
+    <div class="rps">
+      <div class="slabel">Observed Streamflow</div>
+      <label class="upload-zone"><input type="file" accept=".csv,.txt" onchange="loadObsFile(this)">📂 Upload Observed Q CSV</label>
+      <textarea id="obs-paste" rows="3" placeholder="Or paste:&#10;time_hr,Q_m3s&#10;0,0&#10;1,25"></textarea>
+      <button class="btn orange sm" style="width:100%;margin-top:3px;" onclick="applyObsPaste()">Load Observed</button>
+      <div id="nse-disp" style="font-size:.58rem;color:var(--muted);margin-top:4px;"></div>
+    </div>
+
+    <div class="rps">
+      <div class="slabel">Catchment Metrics</div>
+      <div class="metrics">
+        <div class="metric"><div class="mlabel">Catchment Area</div><div class="mval" id="m-area">—</div><div class="munit">km²</div></div>
+        <div class="metric"><div class="mlabel">Peak Q</div><div class="mval" id="m-peakq">—</div><div class="munit">m³/s</div></div>
+        <div class="metric"><div class="mlabel">Time to Peak</div><div class="mval" id="m-tp">—</div><div class="munit">hrs</div></div>
+        <div class="metric"><div class="mlabel">IUH Mean TT</div><div class="mval" id="m-tt">—</div><div class="munit">hrs</div></div>
+        <div class="metric"><div class="mlabel">Lag Time</div><div class="mval" id="m-lag">—</div><div class="munit">hrs</div></div>
+        <div class="metric"><div class="mlabel">Total Volume</div><div class="mval" id="m-vol">—</div><div class="munit">Mm³</div></div>
+        <div class="metric"><div class="mlabel">Basin Cells</div><div class="mval" id="m-cells">—</div><div class="munit">cells</div></div>
+        <div class="metric"><div class="mlabel">Max Velocity</div><div class="mval" id="m-vel">—</div><div class="munit">m/s</div></div>
+      </div>
+    </div>
+
+    <div class="rps">
+      <div class="slabel">Instantaneous Unit Hydrograph</div>
+      <canvas id="iuh-canvas"></canvas>
+    </div>
+
+    <div class="rps">
+      <div class="slabel">Selected Outlet Point</div>
+      <div class="coord" id="coord-disp">No point selected&#10;Click on the DEM overlay after loading</div>
+      <button class="btn primary" id="btn-compute" style="margin-top:7px;" disabled onclick="computeHydro()">▶ Compute Hydrograph</button>
+    </div>
+  </div>
+</div>
+
+<!-- Loading overlay -->
+<div class="loading-ov" id="loading">
+  <div class="spinner"></div>
+  <div class="lmsg" id="lmsg">Processing...</div>
+  <div class="lsub" id="lsub"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════
+//  HydroIUH v3 · Leaflet + IUH Engine
+// ════════════════════════════════════════════
+
+const S = {
+  grid:60, cellSize:250, roughness:0.6, seed:42,
+  manN:0.035, velK:1.0, runoff:0.65, dt:30,
+  dem:null, filled:null, fdir:null, facc:null,
+  vel:null, tt:null, iuh:null,
+  selR:-1, selC:-1, mask:null, area:0,
+  hydro:[], rainfall:[], observed:[],
+  done:false, view:'elevation',
+  demMin:0, demMax:1500,
+  bbox:null
+};
+S.rainfall = [0,0,5,15,35,65,120,180,210,175,140,100,70,45,25,15,8,4,2,0,0,0,0,0];
+
+// Slider sync
+function sv(el, key, fmt) {
+  const v = parseFloat(el.value); S[key] = v;
+  const lmap={'sl-grid':'lbl-grid','sl-cell':'lbl-cell','sl-rough':'lbl-rough','sl-seed':'lbl-seed','sl-n':'lbl-n','sl-k':'lbl-k','sl-rc':'lbl-rc','sl-dt':'lbl-dt'};
+  const lbl=document.getElementById(lmap[el.id]);
+  if(lbl) lbl.textContent=fmt?fmt(v):v;
+}
+[['sl-grid','grid'],['sl-cell','cellSize'],['sl-rough','roughness'],['sl-seed','seed'],['sl-n','manN'],['sl-k','velK'],['sl-rc','runoff'],['sl-dt','dt']].forEach(([id,k])=>S[k]=parseFloat(document.getElementById(id).value));
+
+// Helpers
+const toast=(m,d=2500)=>{const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),d);};
+const showLoad=(m,s='')=>{document.getElementById('lmsg').textContent=m;document.getElementById('lsub').textContent=s;document.getElementById('loading').classList.add('show');};
+const hideLoad=()=>document.getElementById('loading').classList.remove('show');
+const setStatus=t=>document.getElementById('status-txt').textContent=t;
+const setProgress=p=>document.getElementById('prog').style.width=p+'%';
+const setPill=t=>document.getElementById('info-pill').textContent=t;
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+const lerp=(a,b,t)=>a+t*(b-a);
+function ps(id,st){const el=document.getElementById('ps-'+id);el.className='pstep '+st;el.querySelector('span').textContent=st==='done'?'✓':st==='active'?'◈':'◻';}
+
+// ════════════════
+//  LEAFLET SETUP
+// ════════════════
+const TILES = {
+  dark:  ['https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png','© CartoDB'],
+  osm:   ['https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png','© OpenStreetMap'],
+  topo:  ['https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png','© OpenTopoMap'],
+  sat:   ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}','© Esri']
+};
+
+const map = L.map('map',{center:[20,0],zoom:3,zoomControl:true});
+let tileLayer = L.tileLayer(TILES.dark[0],{attribution:TILES.dark[1],maxZoom:19}).addTo(map);
+let demOverlay = null;
+let outletMarker = null;
+
+function switchTiles(k){
+  map.removeLayer(tileLayer);
+  tileLayer=L.tileLayer(TILES[k][0],{attribution:TILES[k][1],maxZoom:19}).addTo(map);
+  if(demOverlay) demOverlay.bringToFront();
+}
+
+// Map click → select outlet
+map.on('click',e=>{
+  if(!S.done||!S.bbox)return;
+  const {lat,lng}=e.latlng;
+  const {south,north,west,east}=S.bbox;
+  if(lat<south||lat>north||lng<west||lng>east){toast('Click inside the DEM overlay area');return;}
+  const N=S.grid;
+  const c=Math.max(0,Math.min(N-1,Math.round((lng-west)/(east-west)*(N-1))));
+  const r=Math.max(0,Math.min(N-1,Math.round((north-lat)/(north-south)*(N-1))));
+  S.selR=r; S.selC=c;
+  const elev=S.dem[r*N+c], acc=S.facc[r*N+c];
+  document.getElementById('coord-disp').textContent=
+    `Lat: ${lat.toFixed(5)}\nLon: ${lng.toFixed(5)}\nElev: ${elev.toFixed(1)} m\nFlow Acc: ${acc} cells\nArea: ~${(acc*S.cellSize*S.cellSize/1e6).toFixed(2)} km²`;
+  document.getElementById('btn-compute').disabled=false;
+  if(outletMarker)map.removeLayer(outletMarker);
+  outletMarker=L.marker([lat,lng],{icon:L.divIcon({className:'',html:'<div class="outlet-dot"></div>',iconSize:[14,14],iconAnchor:[7,7]})})
+    .addTo(map).bindPopup(`<b>Outlet Point</b><br>Elev: ${elev.toFixed(0)} m<br>Contributing area: ${(acc*S.cellSize*S.cellSize/1e6).toFixed(2)} km²`).openPopup();
+  computeHydro();
+});
+
+// ════════════════════
+//  DEM OVERLAY
+// ════════════════════
+function buildOverlayCanvas(){
+  const N=S.grid;
+  const cv=document.createElement('canvas');cv.width=N;cv.height=N;
+  const ctx=cv.getContext('2d');
+  const img=ctx.createImageData(N,N);const d=img.data;
+  let maxAcc=1,maxVel=.1,maxTT=1;
+  if(S.facc)for(let i=0;i<N*N;i++)maxAcc=Math.max(maxAcc,S.facc[i]);
+  if(S.vel)for(let i=0;i<N*N;i++)maxVel=Math.max(maxVel,S.vel[i]);
+  if(S.tt)for(let i=0;i<N*N;i++)if(isFinite(S.tt[i]))maxTT=Math.max(maxTT,S.tt[i]);
+  const mn=S.demMin,mx=S.demMax;
+  for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+    const idx=r*N+c;
+    let col,a=210;
+    if(S.view==='elevation'){
+      col=elevColor(S.dem[idx],mn,mx);
+      let dx=0,dy=0;
+      if(c>0&&c<N-1)dx=(S.dem[idx+1]-S.dem[idx-1])/(2*S.cellSize);
+      if(r>0&&r<N-1)dy=(S.dem[(r+1)*N+c]-S.dem[(r-1)*N+c])/(2*S.cellSize);
+      const norm=Math.sqrt(dx*dx+dy*dy+1);
+      const shade=Math.max(.25,(.7*(-dx)+(-.5)*(-dy)+.7)/norm);
+      col=col.map(v=>v*shade);
+    } else if(S.view==='flowacc'){
+      const t=S.facc?Math.pow(S.facc[idx]/maxAcc,.35):0;
+      col=[lerp(10,0,t),lerp(20,160,t),lerp(40,255,t)];
+    } else if(S.view==='flowdir'){
+      col=S.fdir?hsvRgb(S.fdir[idx]/8,.85,.95):[30,30,50];
+    } else if(S.view==='traveltime'){
+      const t=S.tt&&isFinite(S.tt[idx])?S.tt[idx]/maxTT:0;
+      col=[lerp(60,255,t),lerp(0,200,t),lerp(120,0,t)];
+    } else if(S.view==='velocity'){
+      const t=S.vel?S.vel[idx]/maxVel:0;
+      col=[lerp(0,0,t),lerp(30,255,t),lerp(80,180,t)];
+    } else { // catchment
+      if(S.mask&&S.mask[idx]){col=[0,200,255];a=200;}else{col=[0,0,0];a=0;}
+    }
+    // Catchment tint
+    if(S.view!=='catchment'&&S.mask&&S.mask[idx]){col[0]=col[0]*.5;col[1]=Math.min(255,col[1]*.5+100*.5);col[2]=Math.min(255,col[2]*.5+255*.5);}
+    // Rivers
+    if(S.facc&&S.facc[idx]>N*N*.015){const t=Math.min(1,S.facc[idx]/(N*N*.06));col[0]=lerp(col[0],0,t);col[1]=lerp(col[1],120,t);col[2]=lerp(col[2],255,t);}
+    const pi=idx*4;d[pi]=col[0]|0;d[pi+1]=col[1]|0;d[pi+2]=col[2]|0;d[pi+3]=a;
+  }
+  ctx.putImageData(img,0,0);
+  return cv.toDataURL();
+}
+
+function updateOverlay(){
+  if(!S.dem||!S.bbox)return;
+  const {south,north,west,east}=S.bbox;
+  const url=buildOverlayCanvas();
+  if(demOverlay)map.removeLayer(demOverlay);
+  demOverlay=L.imageOverlay(url,[[south,west],[north,east]],{
+    opacity:parseFloat(document.getElementById('sl-opa').value)/100,
+    interactive:false
+  }).addTo(map);
+  document.getElementById('opa-ctrl').style.display='flex';
+}
+
+function setOverlayOpacity(v){
+  if(demOverlay)demOverlay.setOpacity(v/100);
+  document.getElementById('opa-lbl').textContent=v+'%';
+}
+
+// ════════════════
+//  COLOR HELPERS
+// ════════════════
+function elevColor(z,mn,mx){
+  const t=(z-mn)/(mx-mn||1);
+  if(t<.25){const r=t/.25;return[lerp(15,34,r),lerp(40,139,r),lerp(100,34,r)];}
+  if(t<.5){const r=(t-.25)/.25;return[lerp(34,154,r),lerp(139,205,r),lerp(34,50,r)];}
+  if(t<.75){const r=(t-.5)/.25;return[lerp(154,210,r),lerp(205,180,r),lerp(50,140,r)];}
+  const r=(t-.75)/.25;return[lerp(210,255,r),lerp(180,255,r),lerp(140,255,r)];
+}
+function hsvRgb(h,s,v){
+  let r,g,b;const i=Math.floor(h*6),f=h*6-i,p=v*(1-s),q=v*(1-f*s),tt=v*(1-(1-f)*s);
+  switch(i%6){case 0:r=v;g=tt;b=p;break;case 1:r=q;g=v;b=p;break;case 2:r=p;g=v;b=tt;break;case 3:r=p;g=q;b=v;break;case 4:r=tt;g=p;b=v;break;default:r=v;g=p;b=q;}
+  return[r*255,g*255,b*255];
+}
+
+// ═══════════════════════
+//  HYDRO ALGORITHMS
+// ═══════════════════════
+function rng32(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+function synthDEM(){
+  const N=S.grid,dem=new Float32Array(N*N);
+  for(let sc=1;sc<=6;sc++){
+    const freq=Math.pow(2,sc),amp=Math.pow(S.roughness,sc-1)*(800/freq);
+    for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+      const gi=Math.floor(r*freq/N),gj=Math.floor(c*freq/N),fi=r*freq/N-gi,fj=c*freq/N-gj,sd=S.seed+sc*1000;
+      const a=rng32(sd+gi*200+gj)(),b=rng32(sd+(gi+1)*200+gj)(),cc=rng32(sd+gi*200+gj+1)(),dd=rng32(sd+(gi+1)*200+gj+1)();
+      dem[r*N+c]+=(a+fi*(b-a)+fj*(cc+fi*(dd-cc)-(a+fi*(b-a))))*amp;
+    }
+  }
+  for(let r=0;r<N;r++) for(let c=0;c<N;c++) dem[r*N+c]+=(r/N)*300+(Math.abs(c-N/2)/N)*120;
+  let mn=Infinity,mx=-Infinity;for(let i=0;i<N*N;i++){mn=Math.min(mn,dem[i]);mx=Math.max(mx,dem[i]);}
+  for(let i=0;i<N*N;i++) dem[i]=((dem[i]-mn)/(mx-mn))*1500;
+  return dem;
+}
+
+function fillDep(dem){
+  const N=S.grid,f=new Float32Array(dem);let ch=true,it=0;
+  const dirs=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  while(ch&&it<60){ch=false;it++;
+    for(let r=1;r<N-1;r++) for(let c=1;c<N-1;c++){
+      const idx=r*N+c;let mn=Infinity;
+      for(const[dr,dc]of dirs)mn=Math.min(mn,f[(r+dr)*N+(c+dc)]);
+      if(f[idx]<mn){f[idx]=mn+.001;ch=true;}
+    }
+  }return f;
+}
+
+const D8R=[-1,-1,-1,0,0,1,1,1],D8C=[-1,0,1,-1,1,-1,0,1],D8D=[Math.SQRT2,1,Math.SQRT2,1,1,Math.SQRT2,1,Math.SQRT2];
+
+function flowDirFn(dem){
+  const N=S.grid,fd=new Int8Array(N*N).fill(-1);
+  for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+    if(r===0||r===N-1||c===0||c===N-1){fd[r*N+c]=6;continue;}
+    const z=dem[r*N+c];let ms=-Infinity,bd=-1;
+    for(let d=0;d<8;d++){const nr=r+D8R[d],nc=c+D8C[d];if(nr<0||nr>=N||nc<0||nc>=N)continue;const sl=(z-dem[nr*N+nc])/D8D[d];if(sl>ms){ms=sl;bd=d;}}
+    fd[r*N+c]=bd>=0?bd:6;
+  }return fd;
+}
+
+function flowAccFn(fd){
+  const N=S.grid,acc=new Int32Array(N*N).fill(1),inD=new Int32Array(N*N);
+  for(let r=0;r<N;r++) for(let c=0;c<N;c++){const d=fd[r*N+c];if(d<0)continue;const nr=r+D8R[d],nc=c+D8C[d];if(nr>=0&&nr<N&&nc>=0&&nc<N)inD[nr*N+nc]++;}
+  const q=[];for(let i=0;i<N*N;i++)if(inD[i]===0)q.push(i);let h=0;
+  while(h<q.length){const idx=q[h++],r=Math.floor(idx/N),c=idx%N,d=fd[idx];if(d<0)continue;const nr=r+D8R[d],nc=c+D8C[d];if(nr<0||nr>=N||nc<0||nc>=N)continue;const ni=nr*N+nc;acc[ni]+=acc[idx];inD[ni]--;if(inD[ni]===0)q.push(ni);}
+  return acc;
+}
+
+function velFn(dem,facc){
+  const N=S.grid,cs=S.cellSize,v=new Float32Array(N*N);
+  for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+    const idx=r*N+c;let dz=0;
+    for(const[dr,dc]of[[-1,0],[1,0],[0,-1],[0,1]]){const nr=r+dr,nc2=c+dc;if(nr>=0&&nr<N&&nc2>=0&&nc2<N)dz=Math.max(dz,Math.abs(dem[idx]-dem[nr*N+nc2])/cs);}
+    v[idx]=Math.min(8,Math.max(.05,S.velK*Math.pow(facc[idx]*cs*cs,.4)*Math.pow(Math.max(dz,.0001),.3)/S.manN));
+  }return v;
+}
+
+function ttFn(fd,vel){
+  const N=S.grid,cs=S.cellSize,tt=new Float32Array(N*N).fill(Infinity),inD=new Int32Array(N*N);
+  for(let r=0;r<N;r++) for(let c=0;c<N;c++){const d=fd[r*N+c];if(d<0)continue;const nr=r+D8R[d],nc=c+D8C[d];if(nr>=0&&nr<N&&nc>=0&&nc<N)inD[nr*N+nc]++;}
+  const q=[];for(let i=0;i<N*N;i++)if(inD[i]===0){tt[i]=0;q.push(i);}let h=0;
+  while(h<q.length){const idx=q[h++],r=Math.floor(idx/N),c=idx%N,d=fd[idx];if(d<0)continue;const nr=r+D8R[d],nc=c+D8C[d];if(nr<0||nr>=N||nc<0||nc>=N)continue;const ni=nr*N+nc,ntt=tt[idx]+D8D[d]*cs/((vel[idx]+vel[ni])/2);if(ntt<tt[ni])tt[ni]=ntt;inD[ni]--;if(inD[ni]===0)q.push(ni);}
+  return tt;
+}
+
+function delinFn(fd,row,col){
+  const N=S.grid,mask=new Uint8Array(N*N),q=[row*N+col];mask[row*N+col]=1;let h=0;
+  while(h<q.length){const idx=q[h++],r=Math.floor(idx/N),c=idx%N;
+    for(let d=0;d<8;d++){const nr=r-D8R[d],nc=c-D8C[d];if(nr<0||nr>=N||nc<0||nc>=N)continue;const ni=nr*N+nc;if(!mask[ni]&&fd[ni]===d){mask[ni]=1;q.push(ni);}}}
+  return mask;
+}
+
+function iuhFn(relTT,mask){
+  const N=S.grid,dtSec=S.dt*60,tts=[];
+  for(let i=0;i<N*N;i++)if(mask[i]&&isFinite(relTT[i]))tts.push(relTT[i]);
+  if(!tts.length)return[];
+  const maxT=Math.max(...tts),nB=Math.ceil(maxT/dtSec)+2,hist=new Float64Array(nB);
+  for(const t of tts){const b=Math.floor(t/dtSec);if(b<nB)hist[b]++;}
+  const tot=tts.length,iuh=[];for(let i=0;i<nB;i++)iuh.push(hist[i]/tot/dtSec);
+  return iuh;
+}
+
+function convolve(rain,iuh,area){
+  const dtSec=S.dt*60,Q=new Float64Array(rain.length+iuh.length);
+  for(let i=0;i<rain.length;i++){const vol=(rain[i]/1000)*S.runoff*area;for(let j=0;j<iuh.length;j++)Q[i+j]+=vol*iuh[j]*dtSec;}
+  return Array.from(Q);
+}
+
+function nse(sim,obs){
+  if(!obs||obs.length<2)return null;
+  const dtH=S.dt/60;
+  const qO=sim.map((_,i)=>{const t=i*dtH,lo=obs.filter(o=>o.t<=t).pop(),hi=obs.find(o=>o.t>t);if(!lo)return hi?hi.q:null;if(!hi)return lo.q;return lo.q+(t-lo.t)/(hi.t-lo.t)*(hi.q-lo.q);}).filter(v=>v!==null);
+  const qS=sim.slice(0,qO.length),mn=qO.reduce((s,v)=>s+v,0)/qO.length;
+  let num=0,den=0;for(let i=0;i<qO.length;i++){num+=(qS[i]-qO[i])**2;den+=(qO[i]-mn)**2;}
+  return den===0?null:1-num/den;
+}
+
+// ═══════════════════
+//  PIPELINE
+// ═══════════════════
+async function runPipeline(customDEM){
+  S.done=false;S.selR=-1;S.selC=-1;S.mask=null;S.hydro=[];
+  if(outletMarker){map.removeLayer(outletMarker);outletMarker=null;}
+  document.getElementById('btn-compute').disabled=true;
+  document.getElementById('coord-disp').textContent='No point selected\nClick on the DEM overlay after loading';
+  ['dem','fill','fdir','facc','vel','tt','iuh'].forEach(s=>ps(s,'pending'));
+  setProgress(0);
+
+  await delay(20);
+  ps('dem','active');setStatus('LOAD DEM');setProgress(5);showLoad('Loading DEM...');await delay(30);
+  if(customDEM){
+    S.dem=customDEM;S.grid=customDEM._grid||S.grid;S.cellSize=customDEM._cellSize||S.cellSize;
+    let mn=Infinity,mx=-Infinity;for(let i=0;i<S.dem.length;i++){mn=Math.min(mn,S.dem[i]);mx=Math.max(mx,S.dem[i]);}
+    S.demMin=mn;S.demMax=mx;
+  } else {
+    S.dem=synthDEM();S.demMin=0;S.demMax=1500;
+    const c=map.getCenter(),ext=(S.grid*S.cellSize/111320)/2;
+    S.bbox={south:c.lat-ext,north:c.lat+ext,west:c.lng-ext,east:c.lng+ext};
+    map.fitBounds([[S.bbox.south,S.bbox.west],[S.bbox.north,S.bbox.east]]);
+  }
+  ps('dem','done');setProgress(15);
+
+  ps('fill','active');setStatus('FILL');showLoad('Filling depressions...');await delay(30);
+  S.filled=fillDep(S.dem);ps('fill','done');setProgress(30);
+
+  ps('fdir','active');setStatus('FLOW DIR');showLoad('D8 flow directions...');await delay(30);
+  S.fdir=flowDirFn(S.filled);ps('fdir','done');setProgress(45);
+
+  ps('facc','active');setStatus('FLOW ACC');showLoad('Flow accumulation...');await delay(30);
+  S.facc=flowAccFn(S.fdir);ps('facc','done');setProgress(60);
+
+  ps('vel','active');setStatus('VELOCITY');showLoad('Maidment velocities...');await delay(30);
+  S.vel=velFn(S.filled,S.facc);ps('vel','done');setProgress(75);
+
+  ps('tt','active');setStatus('TRAVEL TIME');showLoad('Computing travel times...');await delay(30);
+  S.tt=ttFn(S.fdir,S.vel);ps('tt','done');setProgress(90);
+
+  ps('iuh','active');showLoad('Pipeline complete!');await delay(20);
+  ps('iuh','done');setProgress(100);
+
+  S.done=true;
+  updateOverlay();
+  hideLoad();
+  setStatus('SELECT OUTLET');
+  setPill('✅ DEM loaded — click anywhere on the coloured overlay to select an outlet point');
+  toast('✓ DEM processed — click on the map to place your outlet point');
+}
+
+function recompute(){
+  if(!S.dem)return;
+  S.vel=velFn(S.filled,S.facc);
+  S.tt=ttFn(S.fdir,S.vel);
+  if(S.selR>=0)computeHydro();
+  updateOverlay();
+}
+
+function computeHydro(){
+  if(!S.done||S.selR<0)return;
+  const N=S.grid;
+  S.mask=delinFn(S.fdir,S.selR,S.selC);
+  let cells=0;for(let i=0;i<N*N;i++)if(S.mask[i])cells++;
+  S.area=cells*S.cellSize*S.cellSize;
+  const outTT=S.tt[S.selR*N+S.selC];
+  const relTT=new Float32Array(N*N).fill(Infinity);
+  for(let i=0;i<N*N;i++)if(S.mask[i])relTT[i]=Math.max(0,outTT-S.tt[i]);
+  S.iuh=iuhFn(relTT,S.mask);
+  S.hydro=convolve(S.rainfall,S.iuh,S.area);
+  updateMetrics();updateOverlay();renderHydro();renderIUH();
+  document.getElementById('outlet-lbl').textContent=`— ${(S.area/1e6).toFixed(1)} km² · ${cells} cells`;
+}
+
+// ════════════════
+//  LOCATION
+// ════════════════
+async function searchLoc(){
+  const q=document.getElementById('loc-input').value.trim();if(!q)return;
+  const ll=q.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
+  if(ll){map.setView([parseFloat(ll[1]),parseFloat(ll[2])],11);toast('📍 Map centred');return;}
+  showLoad('Geocoding...','OpenStreetMap Nominatim');
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`,{headers:{'Accept-Language':'en'}});
+    const data=await r.json();
+    if(!data.length){hideLoad();toast('Location not found');return;}
+    const loc=data[0];
+    map.setView([parseFloat(loc.lat),parseFloat(loc.lon)],12);
+    hideLoad();toast(`📍 ${loc.display_name.split(',').slice(0,2).join(',')}`);
+  }catch(e){hideLoad();toast('Geocoding failed');}
+}
+
+// ═══════════════════
+//  FETCH GLOBAL DEM
+// ═══════════════════
+async function fetchDEM(){
+  const key=document.getElementById('ot-key').value.trim();
+  if(!key){toast('Enter OpenTopography API key — free at opentopography.org');return;}
+  const b=map.getBounds();
+  const south=b.getSouth(),north=b.getNorth(),west=b.getWest(),east=b.getEast();
+  if((north-south)>1.5||(east-west)>1.5){toast('Zoom in more — area too large (max ~150km)');return;}
+  S.bbox={south,north,west,east};
+  const src=document.getElementById('dem-src').value;
+  showLoad(`Fetching ${src} DEM...`,`${(north-south).toFixed(3)}° × ${(east-west).toFixed(3)}°`);
+  try{
+    const url=`https://portal.opentopography.org/API/globaldem?demtype=${src}&south=${south.toFixed(5)}&north=${north.toFixed(5)}&west=${west.toFixed(5)}&east=${east.toFixed(5)}&outputFormat=GTiff&API_Key=${key}`;
+    const resp=await fetch(url);
+    if(!resp.ok){hideLoad();toast(`API error ${resp.status} — check key`);return;}
+    const buf=await resp.arrayBuffer();
+    await parseTIFFBuf(buf);
+  }catch(e){hideLoad();toast('Fetch failed — try uploading file instead');}
+}
+
+function runSynth(){runPipeline(null);}
+
+// ═══════════════════
+//  FILE LOADERS
+// ═══════════════════
+async function loadTIFF(input){
+  const file=input.files[0];if(!file)return;
+  showLoad('Reading GeoTIFF...');
+  try{const buf=await file.arrayBuffer();await parseTIFFBuf(buf);}
+  catch(e){hideLoad();toast('GeoTIFF error: '+e.message);}
+}
+
+async function parseTIFFBuf(buf){
+  // Dynamically load GeoTIFF.js if not present
+  if(typeof GeoTIFF==='undefined'){
+    await new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/geotiff/2.1.3/geotiff.browser.min.js';
+      s.onload=res;s.onerror=rej;document.head.appendChild(s);
+    });
+  }
+  showLoad('Parsing GeoTIFF raster...');
+  try{
+    const tiff=await GeoTIFF.fromArrayBuffer(buf);
+    const image=await tiff.getImage();
+    const W=image.getWidth(),H=image.getHeight();
+    const rasters=await image.readRasters();
+    const elev=rasters[0];
+    const nodata=image.fileDirectory.GDAL_NODATA?parseFloat(image.fileDirectory.GDAL_NODATA):-9999;
+    const N=Math.min(80,Math.max(30,Math.floor(Math.sqrt(W*H/100))));
+    const dem=resample(elev,W,H,N,N,nodata);
+    dem._grid=N;
+    try{
+      const origin=image.getOrigin(),res=image.getResolution();
+      dem._cellSize=Math.max(10,Math.abs(res[0])*111320);
+      S.bbox={west:origin[0],north:origin[1],east:origin[0]+W*res[0],south:origin[1]+H*res[1]};
+      if(S.bbox.south>S.bbox.north){[S.bbox.south,S.bbox.north]=[S.bbox.north,S.bbox.south];}
+      map.fitBounds([[S.bbox.south,S.bbox.west],[S.bbox.north,S.bbox.east]]);
+    }catch(e){
+      const b=map.getBounds();S.bbox={south:b.getSouth(),north:b.getNorth(),west:b.getWest(),east:b.getEast()};dem._cellSize=250;
+    }
+    S.grid=N;S.cellSize=dem._cellSize;
+    await runPipeline(dem);
+    toast(`✓ GeoTIFF ${W}×${H} → resampled ${N}×${N}`);
+  }catch(e){hideLoad();toast('Parse failed: '+e.message);}
+}
+
+async function loadASC(input){const txt=await input.files[0].text();parseASCII(txt);}
+
+function parseASCII(txt){
+  const lines=txt.trim().split('\n');
+  let nc=0,nr=0,cs=250,nd=-9999,xll=0,yll=0,ds=0;
+  for(let i=0;i<Math.min(10,lines.length);i++){
+    const l=lines[i].trim().toLowerCase();
+    if(l.startsWith('ncols'))nc=parseInt(l.split(/\s+/)[1]);
+    else if(l.startsWith('nrows'))nr=parseInt(l.split(/\s+/)[1]);
+    else if(l.startsWith('cellsize'))cs=parseFloat(l.split(/\s+/)[1]);
+    else if(l.startsWith('xll'))xll=parseFloat(l.split(/\s+/)[1]);
+    else if(l.startsWith('yll'))yll=parseFloat(l.split(/\s+/)[1]);
+    else if(l.startsWith('nodata'))nd=parseFloat(l.split(/\s+/)[1]);
+    else if(!isNaN(parseFloat(l.split(/\s+/)[0]))){ds=i;break;}
+  }
+  if(!nc||!nr){toast('Invalid ASCII grid — need ncols/nrows header');return;}
+  const vals=lines.slice(ds).join(' ').trim().split(/\s+/).map(Number);
+  const N=Math.min(80,Math.max(30,Math.floor(Math.sqrt(nc*nr/4))));
+  const dem=resample(Float32Array.from(vals),nc,nr,N,N,nd);
+  dem._grid=N;dem._cellSize=cs;S.grid=N;S.cellSize=cs;
+  if(Math.abs(xll)<360&&Math.abs(yll)<90){
+    S.bbox={west:xll,south:yll,east:xll+nc*cs/111320,north:yll+nr*cs/111320};
+    map.fitBounds([[S.bbox.south,S.bbox.west],[S.bbox.north,S.bbox.east]]);
+  } else {
+    const b=map.getBounds();S.bbox={south:b.getSouth(),north:b.getNorth(),west:b.getWest(),east:b.getEast()};
+  }
+  runPipeline(dem);toast(`✓ ASCII ${nc}×${nr} → ${N}×${N}`);
+}
+
+function resample(src,sW,sH,dW,dH,nd){
+  const out=new Float32Array(dW*dH);
+  let mn=Infinity;for(let i=0;i<src.length;i++)if(src[i]!==nd&&isFinite(src[i]))mn=Math.min(mn,src[i]);
+  for(let r=0;r<dH;r++) for(let c=0;c<dW;c++){const v=src[Math.floor(r/dH*sH)*sW+Math.floor(c/dW*sW)];out[r*dW+c]=(v===nd||!isFinite(v))?mn:v;}
+  return out;
+}
+
+// ═══════════════════
+//  RAINFALL UI
+// ═══════════════════
+function buildRainUI(){
+  const bars=document.getElementById('rain-bars'),inps=document.getElementById('rain-inps');
+  bars.innerHTML='';inps.innerHTML='';
+  const maxR=Math.max(...S.rainfall,1);
+  S.rainfall.forEach((v,i)=>{
+    const col=document.createElement('div');col.className='rain-col';
+    const bar=document.createElement('div');bar.className='rain-bar';bar.style.height=(v/maxR*48)+'px';
+    const lbl=document.createElement('div');lbl.className='rain-val';lbl.textContent=v||'';
+    col.appendChild(bar);col.appendChild(lbl);bars.appendChild(col);
+    const inp=document.createElement('input');inp.type='number';inp.className='rinp';inp.value=v;inp.min=0;inp.max=500;
+    inp.addEventListener('change',()=>{S.rainfall[i]=parseFloat(inp.value)||0;buildRainUI();if(S.done&&S.selR>=0)computeHydro();});
+    inps.appendChild(inp);
+  });
+}
+
+const PRESETS={
+  toowoomba:[0,0,5,15,35,65,120,180,210,175,140,100,70,45,25,15,8,4,2,0,0,0,0,0],
+  design:[0,5,15,40,80,120,100,75,55,35,20,10,5,2,0,0,0,0,0,0,0,0,0,0],
+  uniform:Array(24).fill(0).map((_,i)=>i>=1&&i<=12?30:0)
+};
+function loadPreset(k){S.rainfall=[...PRESETS[k]];buildRainUI();if(S.done&&S.selR>=0)computeHydro();}
+function clearRain(){S.rainfall=Array(24).fill(0);buildRainUI();if(S.done&&S.selR>=0)computeHydro();}
+async function loadRainFile(i){const txt=await i.files[0].text();applyRainCSV(txt);}
+function applyRainPaste(){applyRainCSV(document.getElementById('rain-paste').value);}
+function applyRainCSV(txt){
+  const vals=[];for(const l of txt.trim().split('\n')){const p=l.split(',');if(p.length>=2&&!isNaN(p[1]))vals.push(parseFloat(p[1]));}
+  if(!vals.length){toast('No valid data');return;}
+  S.rainfall=vals;buildRainUI();if(S.done&&S.selR>=0)computeHydro();toast(`✓ ${vals.length} rainfall values`);
+}
+async function loadObsFile(i){const txt=await i.files[0].text();applyObsCSV(txt);}
+function applyObsPaste(){applyObsCSV(document.getElementById('obs-paste').value);}
+function applyObsCSV(txt){
+  S.observed=[];for(const l of txt.trim().split('\n')){const p=l.split(',');if(p.length>=2&&!isNaN(p[0])&&!isNaN(p[1]))S.observed.push({t:parseFloat(p[0]),q:parseFloat(p[1])});}
+  if(!S.observed.length){toast('No valid observed data');return;}
+  renderHydro();updateMetrics();toast(`✓ ${S.observed.length} observed points`);
+}
+
+// ═══════════════════
+//  METRICS
+// ═══════════════════
+function updateMetrics(){
+  const Q=S.hydro,dtH=S.dt/60;
+  const peak=Math.max(...Q),tp=Q.indexOf(peak)*dtH,vol=Q.reduce((s,v)=>s+v,0)*S.dt*60/1e6;
+  let mtt=0;(S.iuh||[]).forEach((v,i)=>mtt+=i*dtH*v*S.dt*60);
+  let rc=0,rt=0;S.rainfall.forEach((v,i)=>{rc+=i*dtH*v;rt+=v;});
+  let maxVel=0;if(S.vel&&S.mask)for(let i=0;i<S.grid*S.grid;i++)if(S.mask[i])maxVel=Math.max(maxVel,S.vel[i]);
+  let cells=0;if(S.mask)for(let i=0;i<S.grid*S.grid;i++)if(S.mask[i])cells++;
+  document.getElementById('m-area').textContent=(S.area/1e6).toFixed(1);
+  document.getElementById('m-peakq').textContent=peak.toFixed(1);
+  document.getElementById('m-tp').textContent=tp.toFixed(1);
+  document.getElementById('m-tt').textContent=mtt.toFixed(1);
+  document.getElementById('m-lag').textContent=Math.max(0,tp-(rt>0?rc/rt:0)).toFixed(1);
+  document.getElementById('m-vol').textContent=vol.toFixed(3);
+  document.getElementById('m-cells').textContent=cells;
+  document.getElementById('m-vel').textContent=maxVel.toFixed(2);
+  const n=nse(S.hydro,S.observed);document.getElementById('nse-disp').textContent=n!==null?`Nash-Sutcliffe Efficiency: ${n.toFixed(3)}`:'';
+}
+
+// ════════════════════
+//  HYDROGRAPH CANVAS
+// ════════════════════
+const hCvs=document.getElementById('hydro-canvas'),hCtx=hCvs.getContext('2d');
+function renderHydro(){
+  const W=hCvs.parentElement.clientWidth-22,H=hCvs.parentElement.clientHeight-22;
+  hCvs.width=W;hCvs.height=H;hCtx.clearRect(0,0,W,H);
+  const pad={l:44,r:12,t:5,b:24},pw=W-pad.l-pad.r,ph=H-pad.t-pad.b;
+  const Q=S.hydro;
+  if(!Q.length){hCtx.fillStyle='#4a6080';hCtx.font='10px Space Mono';hCtx.textAlign='center';hCtx.fillText('Select outlet on map to compute hydrograph',W/2,H/2);return;}
+  const dtH=S.dt/60,maxQ=Math.max(...Q,...S.observed.map(o=>o.q),1),maxT=Q.length*dtH;
+  hCtx.strokeStyle='#1a2840';hCtx.lineWidth=.5;
+  for(let y=0;y<=4;y++){const py=pad.t+(1-y/4)*ph;hCtx.beginPath();hCtx.moveTo(pad.l,py);hCtx.lineTo(pad.l+pw,py);hCtx.stroke();hCtx.fillStyle='#4a6080';hCtx.font='8px Space Mono';hCtx.textAlign='right';hCtx.fillText((maxQ*y/4).toFixed(1),pad.l-3,py+3);}
+  const maxR=Math.max(...S.rainfall,1);
+  S.rainfall.forEach((v,i)=>{const x1=pad.l+(i*dtH/maxT)*pw,x2=pad.l+((i+1)*dtH/maxT)*pw;hCtx.fillStyle='rgba(57,255,20,.1)';hCtx.fillRect(x1,pad.t,x2-x1,(v/maxR)*ph*.45);});
+  if(S.observed.length>1){hCtx.beginPath();hCtx.strokeStyle='#ff6b35';hCtx.lineWidth=1.5;hCtx.setLineDash([4,3]);S.observed.forEach((o,i)=>{const x=pad.l+(o.t/maxT)*pw,y=pad.t+(1-o.q/maxQ)*ph;i===0?hCtx.moveTo(x,y):hCtx.lineTo(x,y);});hCtx.stroke();hCtx.setLineDash([]);}
+  hCtx.beginPath();hCtx.moveTo(pad.l,pad.t+ph);Q.forEach((q,i)=>hCtx.lineTo(pad.l+(i*dtH/maxT)*pw,pad.t+(1-q/maxQ)*ph));hCtx.lineTo(pad.l+(Q.length-1)*dtH/maxT*pw,pad.t+ph);hCtx.closePath();
+  const gr=hCtx.createLinearGradient(0,pad.t,0,pad.t+ph);gr.addColorStop(0,'rgba(0,212,255,.28)');gr.addColorStop(1,'rgba(0,212,255,0)');hCtx.fillStyle=gr;hCtx.fill();
+  hCtx.beginPath();hCtx.strokeStyle='#00d4ff';hCtx.lineWidth=2;Q.forEach((q,i)=>{const x=pad.l+(i*dtH/maxT)*pw,y=pad.t+(1-q/maxQ)*ph;i===0?hCtx.moveTo(x,y):hCtx.lineTo(x,y);});hCtx.stroke();
+  hCtx.strokeStyle='#1a2840';hCtx.lineWidth=1;hCtx.beginPath();hCtx.moveTo(pad.l,pad.t);hCtx.lineTo(pad.l,pad.t+ph);hCtx.lineTo(pad.l+pw,pad.t+ph);hCtx.stroke();
+  hCtx.fillStyle='#4a6080';hCtx.font='8px Space Mono';hCtx.textAlign='center';
+  const step=Math.max(1,Math.ceil(maxT/8));for(let t2=0;t2<=maxT;t2+=step)hCtx.fillText(t2+'h',pad.l+(t2/maxT)*pw,pad.t+ph+12);
+  hCtx.save();hCtx.translate(10,pad.t+ph/2);hCtx.rotate(-Math.PI/2);hCtx.fillText('Q (m³/s)',0,0);hCtx.restore();
+}
+
+// IUH
+const iCvs=document.getElementById('iuh-canvas'),iCtx=iCvs.getContext('2d');
+function renderIUH(){
+  const W=iCvs.parentElement.clientWidth-24,H=62;iCvs.width=W;iCvs.height=H;iCtx.clearRect(0,0,W,H);
+  const iuh=S.iuh;if(!iuh||!iuh.length)return;
+  const maxV=Math.max(...iuh,.000001),n=iuh.length;
+  iCtx.beginPath();iCtx.strokeStyle='#ff6b35';iCtx.lineWidth=1.5;
+  iuh.forEach((v,i)=>{const x=(i/n)*W,y=H-(v/maxV)*(H-10);i===0?iCtx.moveTo(x,y):iCtx.lineTo(x,y);});iCtx.stroke();
+  iCtx.beginPath();iCtx.moveTo(0,H);iuh.forEach((v,i)=>iCtx.lineTo((i/n)*W,H-(v/maxV)*(H-10)));iCtx.lineTo(W,H);iCtx.closePath();
+  const g=iCtx.createLinearGradient(0,0,0,H);g.addColorStop(0,'rgba(255,107,53,.35)');g.addColorStop(1,'rgba(255,107,53,0)');iCtx.fillStyle=g;iCtx.fill();
+  iCtx.fillStyle='#4a6080';iCtx.font='8px Space Mono';iCtx.fillText(`${n} ordinates × ${S.dt}min`,4,10);
+}
+
+// Export
+function exportCSV(){if(!S.hydro.length){toast('No hydrograph');return;}const dtH=S.dt/60;let csv='time_hr,Q_m3s\n';S.hydro.forEach((q,i)=>csv+=`${(i*dtH).toFixed(3)},${q.toFixed(4)}\n`);dl(csv,'hydrograph.csv');}
+function exportIUH(){if(!S.iuh||!S.iuh.length){toast('No IUH');return;}let csv='time_hr,IUH\n';S.iuh.forEach((v,i)=>csv+=`${(i*S.dt/60).toFixed(3)},${v.toExponential(6)}\n`);dl(csv,'iuh.csv');}
+function dl(txt,name){const a=document.createElement('a');a.href='data:text/csv,'+encodeURIComponent(txt);a.download=name;a.click();}
+
+// ═══
+window.addEventListener('resize',()=>renderHydro());
+buildRainUI();
+setTimeout(()=>runSynth(),500);
+</script>
+</body>
+</html>
