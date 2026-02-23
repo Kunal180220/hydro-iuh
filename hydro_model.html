@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HydroIUH — Distributed Hydrological Model</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg: #0a0e17;
+    --panel: #111827;
+    --border: #1e2d40;
+    --accent: #00d4ff;
+    --accent2: #ff6b35;
+    --accent3: #39ff14;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --grid: #1a2535;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: linear-gradient(90deg, #0a0e17 0%, #0d1b2a 100%);
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.4rem;
+    letter-spacing: -0.02em;
+  }
+  .logo span { color: var(--accent); }
+
+  .tagline {
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-left: 1px solid var(--border);
+    padding-left: 16px;
+    margin-left: 4px;
+  }
+
+  .status-bar {
+    margin-left: auto;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent3);
+    box-shadow: 0 0 6px var(--accent3);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity:1; } 50% { opacity:0.3; }
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr 320px;
+    grid-template-rows: calc(100vh - 60px);
+    gap: 0;
+  }
+
+  .sidebar {
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--panel);
+  }
+
+  .main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .right-panel {
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .section-label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+  }
+
+  .param-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+
+  .param-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    color: var(--muted);
+  }
+
+  .param-val {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  input[type=range] {
+    width: 100%;
+    -webkit-appearance: none;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    box-shadow: 0 0 6px var(--accent);
+  }
+
+  .btn {
+    width: 100%;
+    padding: 9px;
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+  .btn:hover { background: var(--accent); color: var(--bg); }
+  .btn.primary { background: var(--accent); color: var(--bg); }
+  .btn.primary:hover { background: #00b8d9; }
+  .btn.orange { border-color: var(--accent2); color: var(--accent2); }
+  .btn.orange:hover { background: var(--accent2); color: var(--bg); }
+  .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* DEM Canvas area */
+  .dem-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #060a10;
+  }
+
+  canvas {
+    display: block;
+  }
+
+  #dem-canvas {
+    cursor: crosshair;
+    width: 100%;
+    height: 100%;
+  }
+
+  .canvas-label {
+    position: absolute;
+    top: 10px; left: 10px;
+    font-size: 0.6rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    pointer-events: none;
+  }
+
+  .click-hint {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.65rem;
+    color: var(--muted);
+    background: rgba(0,0,0,0.7);
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    pointer-events: none;
+  }
+
+  /* Hydrograph area */
+  .hydrograph-area {
+    height: 260px;
+    border-top: 1px solid var(--border);
+    padding: 12px;
+    position: relative;
+    background: var(--bg);
+  }
+
+  #hydro-canvas {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Right panel */
+  .rp-section {
+    padding: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .rainfall-row {
+    display: flex;
+    gap: 4px;
+    align-items: flex-end;
+    height: 60px;
+    margin-top: 8px;
+  }
+
+  .rain-bar-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+    gap: 2px;
+  }
+
+  .rain-bar-input {
+    width: 100%;
+    text-align: center;
+    background: var(--border);
+    border: none;
+    color: var(--accent);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.55rem;
+    padding: 2px;
+    border-radius: 2px;
+  }
+
+  .rain-bar {
+    width: 100%;
+    background: var(--accent);
+    border-radius: 2px 2px 0 0;
+    transition: height 0.3s;
+    min-height: 2px;
+    opacity: 0.8;
+  }
+
+  .rain-label { font-size: 0.55rem; color: var(--muted); }
+
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .metric-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 8px;
+    border-radius: 4px;
+  }
+
+  .metric-label { font-size: 0.55rem; color: var(--muted); margin-bottom: 2px; }
+  .metric-val { font-size: 1rem; font-family: 'Syne', sans-serif; font-weight: 700; color: var(--accent); }
+  .metric-unit { font-size: 0.55rem; color: var(--muted); }
+
+  .pipeline-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+  }
+
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.65rem;
+    padding: 5px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    transition: all 0.3s;
+  }
+
+  .step.done { border-color: var(--accent3); color: var(--accent3); }
+  .step.active { border-color: var(--accent); color: var(--accent); animation: blink 0.8s infinite; }
+  .step.pending { color: var(--muted); }
+
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.5;} }
+
+  .step-icon { font-size: 0.8rem; width: 16px; text-align: center; }
+
+  .legend {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+    font-size: 0.6rem;
+  }
+
+  .legend-item { display: flex; align-items: center; gap: 4px; color: var(--muted); }
+  .legend-dot { width: 8px; height: 3px; border-radius: 1px; }
+
+  textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    padding: 6px;
+    border-radius: 4px;
+    resize: vertical;
+    min-height: 60px;
+  }
+
+  .coord-display {
+    font-size: 0.65rem;
+    color: var(--accent2);
+    margin-top: 4px;
+  }
+
+  select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    padding: 5px;
+    border-radius: 4px;
+  }
+
+  .progress-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent3));
+    border-radius: 2px;
+    transition: width 0.3s;
+    width: 0%;
+  }
+
+  .overflow-note {
+    font-size: 0.55rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Hydro<span>IUH</span></div>
+  <div class="tagline">Distributed Hydrological Model · IUH Convolution Engine</div>
+  <div class="status-bar">
+    <div class="status-dot"></div>
+    <span id="status-text">READY</span>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- LEFT SIDEBAR: Controls -->
+  <div class="sidebar">
+    <div class="section-label">DEM Configuration</div>
+
+    <div class="card">
+      <div class="param-row">
+        <div class="param-label"><span>Grid Size</span><span class="param-val" id="lbl-grid">60×60</span></div>
+        <input type="range" id="sl-grid" min="30" max="100" value="60" step="10">
+      </div>
+      <div class="param-row">
+        <div class="param-label"><span>Cell Size (m)</span><span class="param-val" id="lbl-cell">250</span></div>
+        <input type="range" id="sl-cell" min="50" max="1000" value="250" step="50">
+      </div>
+      <div class="param-row">
+        <div class="param-label"><span>Terrain Roughness</span><span class="param-val" id="lbl-rough">0.6</span></div>
+        <input type="range" id="sl-rough" min="0.1" max="1.0" value="0.6" step="0.1">
+      </div>
+      <div class="param-row">
+        <div class="param-label"><span>Terrain Seed</span><span class="param-val" id="lbl-seed">42</span></div>
+        <input type="range" id="sl-seed" min="1" max="200" value="42" step="1">
+      </div>
+      <button class="btn primary" id="btn-gen">Generate DEM</button>
+    </div>
+
+    <div class="section-label">Model Parameters</div>
+    <div class="card">
+      <div class="param-row">
+        <div class="param-label"><span>Manning's n</span><span class="param-val" id="lbl-n">0.035</span></div>
+        <input type="range" id="sl-n" min="0.01" max="0.15" value="0.035" step="0.005">
+      </div>
+      <div class="param-row">
+        <div class="param-label"><span>Velocity K (Maidment)</span><span class="param-val" id="lbl-k">1.0</span></div>
+        <input type="range" id="sl-k" min="0.2" max="3.0" value="1.0" step="0.1">
+      </div>
+      <div class="param-row">
+        <div class="param-label"><span>Runoff Coeff.</span><span class="param-val" id="lbl-runoff">0.65</span></div>
+        <input type="range" id="sl-runoff" min="0.1" max="1.0" value="0.65" step="0.05">
+      </div>
+      <div class="param-row">
+        <div class="param-label"><span>Time Step (min)</span><span class="param-val" id="lbl-dt">30</span></div>
+        <input type="range" id="sl-dt" min="5" max="120" value="30" step="5">
+      </div>
+    </div>
+
+    <div class="section-label">View Mode</div>
+    <div class="card">
+      <select id="view-mode">
+        <option value="elevation">Elevation (Hillshade)</option>
+        <option value="flowdir">Flow Direction</option>
+        <option value="flowacc">Flow Accumulation</option>
+        <option value="traveltime">Travel Time</option>
+      </select>
+    </div>
+
+    <div class="section-label">Pipeline</div>
+    <div class="pipeline-steps" id="pipeline">
+      <div class="step pending" id="step-dem"><span class="step-icon">◻</span> Generate DEM</div>
+      <div class="step pending" id="step-fill"><span class="step-icon">◻</span> Fill Depressions</div>
+      <div class="step pending" id="step-fdir"><span class="step-icon">◻</span> Flow Directions (D8)</div>
+      <div class="step pending" id="step-facc"><span class="step-icon">◻</span> Flow Accumulation</div>
+      <div class="step pending" id="step-vel"><span class="step-icon">◻</span> Cell Velocities</div>
+      <div class="step pending" id="step-tt"><span class="step-icon">◻</span> Travel Times</div>
+      <div class="step pending" id="step-iuh"><span class="step-icon">◻</span> Derive IUH</div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="prog"></div></div>
+  </div>
+
+  <!-- MAIN: DEM + Hydrograph -->
+  <div class="main">
+    <div class="dem-container">
+      <canvas id="dem-canvas"></canvas>
+      <div class="canvas-label" id="canvas-label">DEM — Click to Generate</div>
+      <div class="click-hint" id="click-hint">▶ Generate DEM first, then click any point to compute hydrograph</div>
+    </div>
+
+    <div class="hydrograph-area">
+      <div class="section-label">Discharge Hydrograph <span id="outlet-info" style="color:var(--muted);font-size:0.6rem;margin-left:8px;"></span></div>
+      <canvas id="hydro-canvas"></canvas>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Computed Q</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--accent2)"></div>Observed (if loaded)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--accent3);opacity:0.5;height:1px"></div>Rainfall</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL: Rainfall + Metrics -->
+  <div class="right-panel">
+    <div class="rp-section">
+      <div class="section-label">Rainfall Input</div>
+      <div style="font-size:0.6rem;color:var(--muted);margin-bottom:6px;">Edit intensity (mm/hr) per time step</div>
+      <div class="rainfall-row" id="rainfall-bars"></div>
+      <div class="overflow-note">Drag sliders or edit values below</div>
+      <div style="margin-top:8px;">
+        <button class="btn" style="margin-bottom:6px;font-size:0.6rem;" id="btn-preset-rain">Load 2011 Toowoomba Event</button>
+        <textarea id="rain-csv" placeholder="Or paste CSV: time(hr),intensity(mm/hr)&#10;0,0&#10;1,45&#10;2,120&#10;3,85&#10;..." rows="4"></textarea>
+        <button class="btn" style="margin-top:4px;font-size:0.6rem;" id="btn-load-csv">Apply CSV</button>
+      </div>
+    </div>
+
+    <div class="rp-section">
+      <div class="section-label">Observed Data</div>
+      <textarea id="obs-csv" placeholder="Paste observed Q (m³/s):&#10;time(hr),Q(m3/s)&#10;0,0&#10;1,10&#10;..." rows="3"></textarea>
+      <button class="btn orange" style="margin-top:6px;font-size:0.6rem;" id="btn-obs">Load Observed</button>
+    </div>
+
+    <div class="rp-section">
+      <div class="section-label">Catchment Metrics</div>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">Catchment Area</div>
+          <div class="metric-val" id="m-area">—</div>
+          <div class="metric-unit">km²</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Peak Q</div>
+          <div class="metric-val" id="m-peakq">—</div>
+          <div class="metric-unit">m³/s</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Time to Peak</div>
+          <div class="metric-val" id="m-tp">—</div>
+          <div class="metric-unit">hrs</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">IUH Mean TT</div>
+          <div class="metric-val" id="m-tt">—</div>
+          <div class="metric-unit">hrs</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Lag Time</div>
+          <div class="metric-val" id="m-lag">—</div>
+          <div class="metric-unit">hrs</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Total Vol.</div>
+          <div class="metric-val" id="m-vol">—</div>
+          <div class="metric-unit">Mm³</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rp-section">
+      <div class="section-label">IUH Ordinates</div>
+      <canvas id="iuh-canvas" style="width:100%;height:80px;margin-top:8px;"></canvas>
+    </div>
+
+    <div class="rp-section">
+      <div class="section-label">Selected Point</div>
+      <div class="coord-display" id="coord-display">No point selected</div>
+      <div style="margin-top:8px;">
+        <button class="btn primary" id="btn-compute" disabled>Compute Hydrograph</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// =========================================================
+//  HydroIUH — Fully Distributed Hydrological Model
+//  IUH-based convolution engine with D8 flow routing
+// =========================================================
+
+const state = {
+  grid: 60, cellSize: 250, roughness: 0.6, seed: 42,
+  manningN: 0.035, velK: 1.0, runoffCoeff: 0.65, dt: 30,
+  dem: null, filled: null, flowDir: null, flowAcc: null,
+  velocity: null, travelTime: null, iuh: null,
+  selectedRow: -1, selectedCol: -1,
+  catchmentMask: null, catchmentArea: 0,
+  hydrograph: [], rainfall: [],
+  observed: [],
+  preprocessDone: false,
+  viewMode: 'elevation'
+};
+
+// ---- Rainfall default ----
+state.rainfall = [0, 10, 35, 80, 120, 95, 65, 40, 25, 15, 8, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+// ---- Sliders ----
+function bindSlider(id, key, lblId, fmt) {
+  const sl = document.getElementById(id);
+  const lbl = document.getElementById(lblId);
+  sl.addEventListener('input', () => {
+    state[key] = parseFloat(sl.value);
+    lbl.textContent = fmt ? fmt(sl.value) : sl.value;
+    if (key !== 'seed' && key !== 'grid' && key !== 'cellSize' && key !== 'roughness') {
+      if (state.preprocessDone) recomputeVelocityAndIUH();
+    }
+  });
+  lbl.textContent = fmt ? fmt(sl.value) : sl.value;
+}
+
+bindSlider('sl-grid','grid','lbl-grid', v => `${v}×${v}`);
+bindSlider('sl-cell','cellSize','lbl-cell');
+bindSlider('sl-rough','roughness','lbl-rough');
+bindSlider('sl-seed','seed','lbl-seed');
+bindSlider('sl-n','manningN','lbl-n');
+bindSlider('sl-k','velK','lbl-k');
+bindSlider('sl-runoff','runoffCoeff','lbl-runoff');
+bindSlider('sl-dt','dt','lbl-dt');
+
+document.getElementById('sl-grid').addEventListener('input', e => { state.grid = parseInt(e.target.value); });
+document.getElementById('view-mode').addEventListener('change', e => { state.viewMode = e.target.value; renderDEM(); });
+
+// ---- Rainfall bars ----
+function buildRainfallUI() {
+  const container = document.getElementById('rainfall-bars');
+  container.innerHTML = '';
+  const maxR = Math.max(...state.rainfall, 1);
+  state.rainfall.forEach((v, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'rain-bar-wrap';
+    const bar = document.createElement('div');
+    bar.className = 'rain-bar';
+    bar.style.height = (v / maxR * 44) + 'px';
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.className = 'rain-bar-input';
+    inp.value = v; inp.min = 0; inp.max = 300;
+    inp.addEventListener('change', () => {
+      state.rainfall[i] = parseFloat(inp.value) || 0;
+      buildRainfallUI();
+      if (state.preprocessDone && state.selectedRow >= 0) computeHydrograph();
+    });
+    wrap.appendChild(bar);
+    wrap.appendChild(inp);
+    container.appendChild(wrap);
+  });
+}
+buildRainfallUI();
+
+// ---- Toowoomba preset ----
+document.getElementById('btn-preset-rain').addEventListener('click', () => {
+  state.rainfall = [0,0,5,15,35,65,120,180,210,175,140,100,70,45,25,15,8,4,2,0,0,0,0,0];
+  buildRainfallUI();
+  if (state.preprocessDone && state.selectedRow >= 0) computeHydrograph();
+});
+
+document.getElementById('btn-load-csv').addEventListener('click', () => {
+  const txt = document.getElementById('rain-csv').value;
+  const lines = txt.trim().split('\n');
+  const vals = [];
+  for (const l of lines) {
+    const parts = l.split(',');
+    if (parts.length >= 2 && !isNaN(parts[1])) vals.push(parseFloat(parts[1]));
+  }
+  if (vals.length > 0) {
+    state.rainfall = vals;
+    buildRainfallUI();
+    if (state.preprocessDone && state.selectedRow >= 0) computeHydrograph();
+  }
+});
+
+document.getElementById('btn-obs').addEventListener('click', () => {
+  const txt = document.getElementById('obs-csv').value;
+  const lines = txt.trim().split('\n');
+  state.observed = [];
+  for (const l of lines) {
+    const p = l.split(',');
+    if (p.length >= 2 && !isNaN(p[0]) && !isNaN(p[1])) {
+      state.observed.push({ t: parseFloat(p[0]), q: parseFloat(p[1]) });
+    }
+  }
+  renderHydrograph();
+});
+
+// ---- Pseudo-random terrain generation (fractal noise) ----
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function generateDEM() {
+  const N = state.grid;
+  const rng = mulberry32(state.seed);
+  const dem = new Float32Array(N * N);
+
+  // Multi-scale noise
+  for (let scale = 1; scale <= 6; scale++) {
+    const freq = Math.pow(2, scale);
+    const amp = Math.pow(state.roughness, scale - 1) * (1000 / freq);
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        // Simple value noise
+        const gi = Math.floor(r * freq / N);
+        const gj = Math.floor(c * freq / N);
+        const fi = (r * freq / N) - gi;
+        const fj = (c * freq / N) - gj;
+        const s = state.seed + scale * 1000;
+        const rng00 = mulberry32(s + gi * 200 + gj)();
+        const rng10 = mulberry32(s + (gi+1)*200 + gj)();
+        const rng01 = mulberry32(s + gi*200 + gj+1)();
+        const rng11 = mulberry32(s + (gi+1)*200 + gj+1)();
+        const top = rng00 + fi*(rng10-rng00);
+        const bot = rng01 + fi*(rng11-rng01);
+        const v = top + fj*(bot-top);
+        dem[r*N+c] += v * amp;
+      }
+    }
+  }
+
+  // Add regional slope (south-toward-outlet trend)
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const slopeBias = (r / N) * 300 + (Math.abs(c - N/2) / N) * 150;
+      dem[r*N+c] += slopeBias;
+    }
+  }
+
+  // Normalize to 0–1500 m range
+  let mn = Infinity, mx = -Infinity;
+  for (let i = 0; i < N*N; i++) { mn = Math.min(mn, dem[i]); mx = Math.max(mx, dem[i]); }
+  for (let i = 0; i < N*N; i++) dem[i] = ((dem[i]-mn)/(mx-mn))*1500;
+
+  return dem;
+}
+
+// ---- Depression filling (simple iterative priority flood) ----
+function fillDepressions(dem) {
+  const N = state.grid;
+  const filled = new Float32Array(dem);
+  // Simple approach: raise cells to their minimum neighbour iteratively
+  const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  let changed = true;
+  let itr = 0;
+  while (changed && itr < 50) {
+    changed = false; itr++;
+    for (let r = 1; r < N-1; r++) {
+      for (let c = 1; c < N-1; c++) {
+        const idx = r*N+c;
+        let minNeigh = Infinity;
+        for (const [dr,dc] of dirs) {
+          const ni = (r+dr)*N+(c+dc);
+          minNeigh = Math.min(minNeigh, filled[ni]);
+        }
+        if (filled[idx] < minNeigh) {
+          filled[idx] = minNeigh + 0.001;
+          changed = true;
+        }
+      }
+    }
+  }
+  return filled;
+}
+
+// ---- D8 Flow Direction ----
+// Returns direction index 0-7 (NW,N,NE,W,E,SW,S,SE), -1 for flat
+const D8_DR = [-1,-1,-1,0,0,1,1,1];
+const D8_DC = [-1,0,1,-1,1,-1,0,1];
+const D8_DIST = [Math.SQRT2,1,Math.SQRT2,1,1,Math.SQRT2,1,Math.SQRT2];
+
+function computeFlowDir(dem) {
+  const N = state.grid;
+  const fdir = new Int8Array(N * N).fill(-1);
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      if (r===0||r===N-1||c===0||c===N-1) { fdir[r*N+c]=6; continue; } // boundary → south
+      const z = dem[r*N+c];
+      let maxSlope = -Infinity, bestDir = -1;
+      for (let d = 0; d < 8; d++) {
+        const nr = r + D8_DR[d], nc = c + D8_DC[d];
+        if (nr<0||nr>=N||nc<0||nc>=N) continue;
+        const slope = (z - dem[nr*N+nc]) / D8_DIST[d];
+        if (slope > maxSlope) { maxSlope = slope; bestDir = d; }
+      }
+      fdir[r*N+c] = bestDir >= 0 ? bestDir : 6;
+    }
+  }
+  return fdir;
+}
+
+// ---- Flow Accumulation ----
+function computeFlowAcc(fdir) {
+  const N = state.grid;
+  const acc = new Int32Array(N * N).fill(1);
+  // Topological sort + accumulate
+  const inDeg = new Int32Array(N * N);
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const d = fdir[r*N+c];
+      if (d < 0) continue;
+      const nr = r+D8_DR[d], nc = c+D8_DC[d];
+      if (nr>=0&&nr<N&&nc>=0&&nc<N) inDeg[nr*N+nc]++;
+    }
+  }
+  const queue = [];
+  for (let i = 0; i < N*N; i++) if (inDeg[i]===0) queue.push(i);
+  let head = 0;
+  while (head < queue.length) {
+    const idx = queue[head++];
+    const r = Math.floor(idx/N), c = idx%N;
+    const d = fdir[idx];
+    if (d < 0) continue;
+    const nr = r+D8_DR[d], nc = c+D8_DC[d];
+    if (nr<0||nr>=N||nc<0||nc>=N) continue;
+    const ni = nr*N+nc;
+    acc[ni] += acc[idx];
+    inDeg[ni]--;
+    if (inDeg[ni]===0) queue.push(ni);
+  }
+  return acc;
+}
+
+// ---- Maidment Velocity: v = k * (A^0.4) * (S^0.3) / n ----
+function computeVelocity(dem, flowAcc) {
+  const N = state.grid; const cs = state.cellSize;
+  const vel = new Float32Array(N * N);
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const idx = r*N+c;
+      // Local slope from central difference
+      let dz = 0, count = 0;
+      for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        const nr=r+dr, nc2=c+dc;
+        if(nr>=0&&nr<N&&nc2>=0&&nc2<N) {
+          dz = Math.max(dz, Math.abs(dem[idx]-dem[nr*N+nc2])/cs);
+          count++;
+        }
+      }
+      const S = Math.max(dz, 0.0001);
+      const A = flowAcc[idx] * cs * cs; // contributing area m²
+      vel[idx] = Math.max(0.05, state.velK * Math.pow(A, 0.4) * Math.pow(S, 0.3) / state.manningN);
+      vel[idx] = Math.min(vel[idx], 8.0); // cap at 8 m/s
+    }
+  }
+  return vel;
+}
+
+// ---- Travel Time: tt[cell] = distance / velocity along flow path ----
+function computeTravelTime(fdir, vel) {
+  const N = state.grid; const cs = state.cellSize;
+  const tt = new Float32Array(N * N).fill(Infinity);
+  // Process in reverse topological order (from outlet upstream)
+  // Actually forward: start from headwaters
+  const inDeg = new Int32Array(N * N);
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const d = fdir[r*N+c]; if (d<0) continue;
+      const nr=r+D8_DR[d], nc=c+D8_DC[d];
+      if(nr>=0&&nr<N&&nc>=0&&nc<N) inDeg[nr*N+nc]++;
+    }
+  }
+  const queue = [];
+  for (let i = 0; i < N*N; i++) {
+    if (inDeg[i]===0) { tt[i] = 0; queue.push(i); }
+  }
+  let head = 0;
+  while (head < queue.length) {
+    const idx = queue[head++];
+    const r=Math.floor(idx/N), c=idx%N;
+    const d = fdir[idx]; if(d<0) continue;
+    const nr=r+D8_DR[d], nc=c+D8_DC[d];
+    if(nr<0||nr>=N||nc<0||nc>=N) continue;
+    const ni = nr*N+nc;
+    const dist = D8_DIST[d] * cs; // diagonal or cardinal
+    const avgVel = (vel[idx] + vel[ni]) / 2;
+    const dt_cell = dist / avgVel; // seconds
+    const newTT = tt[idx] + dt_cell;
+    if (newTT < tt[ni]) tt[ni] = newTT;
+    inDeg[ni]--;
+    if (inDeg[ni]===0) queue.push(ni);
+  }
+  return tt; // in seconds
+}
+
+// ---- Derive IUH from catchment travel time distribution ----
+function deriveIUH(travelTime, catchmentMask) {
+  const N = state.grid;
+  const dtSec = state.dt * 60;
+  // Collect valid TT values
+  const tts = [];
+  for (let i = 0; i < N*N; i++) {
+    if (catchmentMask[i] && isFinite(travelTime[i])) tts.push(travelTime[i]);
+  }
+  if (tts.length === 0) return [];
+  const maxTT = Math.max(...tts);
+  const nBins = Math.ceil(maxTT / dtSec) + 2;
+  const hist = new Float64Array(nBins).fill(0);
+  for (const t of tts) {
+    const bin = Math.floor(t / dtSec);
+    if (bin < nBins) hist[bin] += 1;
+  }
+  // Normalize to get IUH (1/s → integrate to 1)
+  const total = tts.length;
+  const iuh = [];
+  for (let i = 0; i < nBins; i++) {
+    iuh.push(hist[i] / total / dtSec); // per second ordinates
+  }
+  return iuh;
+}
+
+// ---- Delineate catchment upstream of selected point ----
+function delineateCatchment(fdir, row, col) {
+  const N = state.grid;
+  const mask = new Uint8Array(N * N);
+  // BFS upstream from (row,col)
+  const queue = [row*N+col];
+  mask[row*N+col] = 1;
+  // Reverse flow direction map
+  const revD = [7,6,5,4,3,2,1,0]; // each direction's opposite
+  let head = 0;
+  while (head < queue.length) {
+    const idx = queue[head++];
+    const r=Math.floor(idx/N), c=idx%N;
+    // Find all cells that drain TO (r,c)
+    for (let d=0;d<8;d++) {
+      const nr=r-D8_DR[d], nc=c-D8_DC[d];
+      if(nr<0||nr>=N||nc<0||nc>=N) continue;
+      const ni=nr*N+nc;
+      if(mask[ni]) continue;
+      if(fdir[ni]===d) { mask[ni]=1; queue.push(ni); }
+    }
+  }
+  return mask;
+}
+
+// ---- Convolution: Q = rainfall excess * IUH ----
+function convolveHydrograph(rainfall, iuh, catchmentArea) {
+  const dtSec = state.dt * 60;
+  const dtHr = state.dt / 60;
+  const nR = rainfall.length;
+  const nIUH = iuh.length;
+  const nOut = nR + nIUH;
+  const Q = new Float64Array(nOut).fill(0);
+
+  for (let i = 0; i < nR; i++) {
+    const pExcess = rainfall[i] / 1000 * state.runoffCoeff / 3600; // m/s
+    const volume = pExcess * catchmentArea * dtHr; // m³ per time step increment (m³/hr)
+    // Actually: Q (m³/s) = P_excess (m/hr) * A (m²) / 3600 convolved with IUH
+    // IUH ordinate * total excess rainfall
+    const rainfallVol = (rainfall[i]/1000) * state.runoffCoeff * catchmentArea; // m³ per hr * 1hr
+    for (let j = 0; j < nIUH; j++) {
+      Q[i+j] += rainfallVol * iuh[j] * dtSec; // m³/s
+    }
+  }
+  return Array.from(Q);
+}
+
+// ---- Pipeline Step helper ----
+function setStep(id, state_) {
+  const el = document.getElementById(id);
+  el.className = 'step ' + state_;
+  const icon = el.querySelector('.step-icon');
+  icon.textContent = state_==='done'?'✓':state_==='active'?'◈':'◻';
+}
+
+function setProgress(pct) {
+  document.getElementById('prog').style.width = pct + '%';
+}
+
+function setStatus(txt) {
+  document.getElementById('status-text').textContent = txt;
+}
+
+// ---- Main preprocess pipeline ----
+async function runPreprocess() {
+  state.preprocessDone = false;
+  state.selectedRow = -1; state.selectedCol = -1;
+  document.getElementById('btn-compute').disabled = true;
+  document.getElementById('coord-display').textContent = 'No point selected';
+  document.getElementById('click-hint').textContent = '⏳ Preprocessing...';
+
+  const N = state.grid = parseInt(document.getElementById('sl-grid').value);
+
+  ['step-dem','step-fill','step-fdir','step-facc','step-vel','step-tt','step-iuh'].forEach(s => setStep(s,'pending'));
+
+  await delay(10);
+  setStep('step-dem','active'); setStatus('GENERATING DEM'); setProgress(5);
+  state.dem = generateDEM();
+  setStep('step-dem','done'); setProgress(15);
+
+  await delay(10);
+  setStep('step-fill','active'); setStatus('FILLING DEPRESSIONS'); setProgress(20);
+  state.filled = fillDepressions(state.dem);
+  setStep('step-fill','done'); setProgress(30);
+
+  await delay(10);
+  setStep('step-fdir','active'); setStatus('FLOW DIRECTIONS D8'); setProgress(35);
+  state.flowDir = computeFlowDir(state.filled);
+  setStep('step-fdir','done'); setProgress(45);
+
+  await delay(10);
+  setStep('step-facc','active'); setStatus('FLOW ACCUMULATION'); setProgress(50);
+  state.flowAcc = computeFlowAcc(state.flowDir);
+  setStep('step-facc','done'); setProgress(60);
+
+  await delay(10);
+  setStep('step-vel','active'); setStatus('MAIDMENT VELOCITY'); setProgress(65);
+  state.velocity = computeVelocity(state.filled, state.flowAcc);
+  setStep('step-vel','done'); setProgress(75);
+
+  await delay(10);
+  setStep('step-tt','active'); setStatus('TRAVEL TIMES'); setProgress(80);
+  state.travelTime = computeTravelTime(state.flowDir, state.velocity);
+  setStep('step-tt','done'); setProgress(90);
+
+  // IUH uses whole domain as placeholder
+  setStep('step-iuh','active'); setStatus('DERIVING IUH'); setProgress(95);
+  const allMask = new Uint8Array(N*N).fill(1);
+  state.iuh = deriveIUH(state.travelTime, allMask);
+  setStep('step-iuh','done'); setProgress(100);
+
+  state.preprocessDone = true;
+  setStatus('READY — CLICK DEM');
+  document.getElementById('click-hint').textContent = '▶ Click any point on the DEM to compute hydrograph';
+  renderDEM();
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function recomputeVelocityAndIUH() {
+  if (!state.dem) return;
+  state.velocity = computeVelocity(state.filled, state.flowAcc);
+  state.travelTime = computeTravelTime(state.flowDir, state.velocity);
+  if (state.selectedRow >= 0) {
+    const N = state.grid;
+    state.catchmentMask = delineateCatchment(state.flowDir, state.selectedRow, state.selectedCol);
+    let cellCount = 0;
+    for (let i=0;i<N*N;i++) if(state.catchmentMask[i]) cellCount++;
+    state.catchmentArea = cellCount * state.cellSize * state.cellSize;
+    const catchTT = new Float32Array(N*N);
+    const outlet = state.selectedRow*N+state.selectedCol;
+    const outletTT = state.travelTime[outlet];
+    for (let i=0;i<N*N;i++) {
+      if(state.catchmentMask[i]) catchTT[i] = outletTT - state.travelTime[i] + state.travelTime[i];
+    }
+    state.iuh = deriveIUH(state.travelTime, state.catchmentMask);
+    computeHydrograph();
+  }
+  renderDEM();
+}
+
+// ---- DEM Rendering ----
+const demCanvas = document.getElementById('dem-canvas');
+const demCtx = demCanvas.getContext('2d');
+
+function colorElevation(z, mn, mx) {
+  const t = (z - mn)/(mx - mn);
+  // Terrain palette: deep blue → green → yellow → white
+  if (t < 0.25) {
+    const r2 = t/0.25;
+    return [lerp(20,34,r2), lerp(40,139,r2), lerp(80,34,r2)];
+  } else if (t < 0.5) {
+    const r2 = (t-0.25)/0.25;
+    return [lerp(34,154,r2), lerp(139,205,r2), lerp(34,50,r2)];
+  } else if (t < 0.75) {
+    const r2 = (t-0.5)/0.25;
+    return [lerp(154,210,r2), lerp(205,180,r2), lerp(50,140,r2)];
+  } else {
+    const r2 = (t-0.75)/0.25;
+    return [lerp(210,255,r2), lerp(180,255,r2), lerp(140,255,r2)];
+  }
+}
+function lerp(a,b,t){return a+t*(b-a);}
+
+function renderDEM() {
+  if (!state.dem) return;
+  const N = state.grid;
+  const W = demCanvas.parentElement.clientWidth;
+  const H = demCanvas.parentElement.clientHeight;
+  demCanvas.width = W; demCanvas.height = H;
+  demCanvas.style.width = W+'px'; demCanvas.style.height = H+'px';
+
+  const cw = W/N, ch = H/N;
+  const dem = state.dem;
+  let mn = Infinity, mx = -Infinity;
+  for (let i=0;i<N*N;i++){mn=Math.min(mn,dem[i]);mx=Math.max(mx,dem[i]);}
+
+  const imgData = demCtx.createImageData(W, H);
+  const data = imgData.data;
+
+  for (let pr=0;pr<H;pr++) {
+    for (let pc=0;pc<W;pc++) {
+      const r=Math.floor(pr/ch), c=Math.floor(pc/cw);
+      if(r>=N||c>=N){continue;}
+      const idx=r*N+c;
+      let col;
+      if (state.viewMode === 'elevation') {
+        // Hillshade
+        col = colorElevation(dem[idx], mn, mx);
+        // Simple hillshade
+        let dzdx=0,dzdy=0;
+        if(c>0&&c<N-1) dzdx=(dem[idx+1]-dem[idx-1])/(2*state.cellSize);
+        if(r>0&&r<N-1) dzdy=(dem[(r+1)*N+c]-dem[(r-1)*N+c])/(2*state.cellSize);
+        const norm = Math.sqrt(dzdx*dzdx+dzdy*dzdy+1);
+        const lx=0.7,ly=-0.5,lz=0.7;
+        const shade = Math.max(0.2, (lx*(-dzdx)+ly*(-dzdy)+lz*1)/norm);
+        col = [col[0]*shade, col[1]*shade, col[2]*shade];
+      } else if (state.viewMode === 'flowdir') {
+        const d = state.flowDir ? state.flowDir[idx] : 0;
+        const hue = (d/8)*360;
+        col = hsvToRgb(hue/360, 0.8, 0.9);
+      } else if (state.viewMode === 'flowacc') {
+        if (!state.flowAcc) { col=[30,30,50]; }
+        else {
+          const acc = state.flowAcc[idx];
+          let maxAcc = 1;
+          for(let i=0;i<N*N;i++) maxAcc=Math.max(maxAcc,state.flowAcc[i]);
+          const t = Math.pow(acc/maxAcc, 0.3);
+          col = [lerp(10,0,t), lerp(20,200,t), lerp(30,255,t)];
+        }
+      } else { // traveltime
+        if (!state.travelTime) { col=[30,30,50]; }
+        else {
+          let maxTT = 1;
+          for(let i=0;i<N*N;i++) if(isFinite(state.travelTime[i])) maxTT=Math.max(maxTT,state.travelTime[i]);
+          const tt = state.travelTime[idx];
+          const t = isFinite(tt) ? tt/maxTT : 0;
+          // Purple to yellow
+          col = [lerp(50,255,t), lerp(0,220,t), lerp(100,0,t)];
+        }
+      }
+
+      // Overlay catchment mask
+      if (state.catchmentMask && state.catchmentMask[idx]) {
+        col[0] = Math.min(255, col[0]*0.7 + 0*0.3);
+        col[1] = Math.min(255, col[1]*0.7 + 212*0.3);
+        col[2] = Math.min(255, col[2]*0.7 + 255*0.3);
+      }
+
+      // Overlay flow accumulation rivers
+      if (state.flowAcc && state.flowAcc[idx] > N*N*0.02) {
+        const t = Math.min(1, (state.flowAcc[idx]/(N*N*0.1)));
+        col[0] = lerp(col[0], 0, t);
+        col[1] = lerp(col[1], 100, t);
+        col[2] = lerp(col[2], 255, t);
+      }
+
+      const pi = (pr*W+pc)*4;
+      data[pi] = col[0]; data[pi+1] = col[1]; data[pi+2] = col[2]; data[pi+3] = 255;
+    }
+  }
+  demCtx.putImageData(imgData, 0, 0);
+
+  // Draw selected point
+  if (state.selectedRow >= 0) {
+    const px = (state.selectedCol + 0.5) * cw;
+    const py = (state.selectedRow + 0.5) * ch;
+    demCtx.beginPath();
+    demCtx.arc(px, py, 8, 0, Math.PI*2);
+    demCtx.fillStyle = 'rgba(255,107,53,0.3)';
+    demCtx.fill();
+    demCtx.beginPath();
+    demCtx.arc(px, py, 5, 0, Math.PI*2);
+    demCtx.fillStyle = '#ff6b35';
+    demCtx.fill();
+    demCtx.beginPath();
+    demCtx.arc(px, py, 5, 0, Math.PI*2);
+    demCtx.strokeStyle = '#fff';
+    demCtx.lineWidth = 1.5;
+    demCtx.stroke();
+  }
+
+  document.getElementById('canvas-label').textContent =
+    `${N}×${N} DEM — ${(state.cellSize*N/1000).toFixed(1)} km × ${(state.cellSize*N/1000).toFixed(1)} km`;
+}
+
+function hsvToRgb(h,s,v) {
+  let r,g,b;
+  const i=Math.floor(h*6),f=h*6-i,p=v*(1-s),q=v*(1-f*s),t=v*(1-(1-f)*s);
+  switch(i%6){case 0:r=v;g=t;b=p;break;case 1:r=q;g=v;b=p;break;
+  case 2:r=p;g=v;b=t;break;case 3:r=p;g=q;b=v;break;
+  case 4:r=t;g=p;b=v;break;case 5:r=v;g=p;b=q;break;}
+  return [r*255,g*255,b*255];
+}
+
+// ---- DEM click handler ----
+demCanvas.addEventListener('click', (e) => {
+  if (!state.preprocessDone) return;
+  const rect = demCanvas.getBoundingClientRect();
+  const N = state.grid;
+  const c = Math.floor((e.clientX - rect.left) / rect.width * N);
+  const r = Math.floor((e.clientY - rect.top) / rect.height * N);
+  if (r<0||r>=N||c<0||c>=N) return;
+  state.selectedRow = r; state.selectedCol = c;
+
+  const elev = state.dem[r*N+c];
+  const acc = state.flowAcc[r*N+c];
+  document.getElementById('coord-display').textContent =
+    `Row:${r} Col:${c} | Elev:${elev.toFixed(0)}m | Acc:${acc} cells`;
+  document.getElementById('btn-compute').disabled = false;
+
+  // Delineate catchment
+  state.catchmentMask = delineateCatchment(state.flowDir, r, c);
+  let cellCount = 0;
+  for (let i=0;i<N*N;i++) if(state.catchmentMask[i]) cellCount++;
+  state.catchmentArea = cellCount * state.cellSize * state.cellSize;
+
+  // Compute relative travel times within catchment (from headwaters to outlet)
+  const outletTT = state.travelTime[r*N+c];
+  const catchTT = new Float32Array(N*N).fill(Infinity);
+  for (let i=0;i<N*N;i++) {
+    if(state.catchmentMask[i]) {
+      // Travel time from this cell to outlet
+      catchTT[i] = outletTT - state.travelTime[i] + state.travelTime[i];
+    }
+  }
+
+  // Derive IUH for this catchment
+  // Use travel time relative to outlet: tt_to_outlet = outletTT - tt_from_headwater... 
+  // Actually: time from cell to outlet = need reverse routing. Approximate:
+  // tt_cell_to_outlet ≈ outletTT - travelTime[cell] (if outlet has highest TT)
+  const catchRelTT = new Float32Array(N*N).fill(Infinity);
+  for (let i=0;i<N*N;i++) {
+    if(state.catchmentMask[i]) {
+      const relTT = outletTT - state.travelTime[i];
+      catchRelTT[i] = Math.max(0, relTT);
+    }
+  }
+
+  // Build IUH from relative TT distribution
+  state.iuh = deriveIUHFromArray(catchRelTT, state.catchmentMask);
+  renderDEM();
+  computeHydrograph();
+});
+
+function deriveIUHFromArray(travelTime, mask) {
+  const N = state.grid;
+  const dtSec = state.dt * 60;
+  const tts = [];
+  for (let i=0;i<N*N;i++) {
+    if(mask[i] && isFinite(travelTime[i])) tts.push(travelTime[i]);
+  }
+  if(tts.length===0) return [];
+  const maxTT = Math.max(...tts);
+  const nBins = Math.ceil(maxTT/dtSec)+2;
+  const hist = new Float64Array(nBins);
+  for(const t of tts) {
+    const bin=Math.floor(t/dtSec);
+    if(bin<nBins) hist[bin]+=1;
+  }
+  const total = tts.length;
+  const iuh = [];
+  for(let i=0;i<nBins;i++) iuh.push(hist[i]/total/dtSec);
+  return iuh;
+}
+
+// ---- Compute Hydrograph ----
+function computeHydrograph() {
+  if (!state.catchmentMask || !state.iuh || state.iuh.length === 0) return;
+  state.hydrograph = convolveHydrograph(state.rainfall, state.iuh, state.catchmentArea);
+  updateMetrics();
+  renderHydrograph();
+  renderIUH();
+  document.getElementById('outlet-info').textContent =
+    `— Catchment: ${(state.catchmentArea/1e6).toFixed(1)} km²`;
+}
+
+document.getElementById('btn-compute').addEventListener('click', computeHydrograph);
+
+// ---- Metrics ----
+function updateMetrics() {
+  const Q = state.hydrograph;
+  const peakQ = Math.max(...Q);
+  const peakIdx = Q.indexOf(peakQ);
+  const dtHr = state.dt/60;
+  const tp = peakIdx * dtHr;
+  const totalVol = Q.reduce((s,v)=>s+v,0) * state.dt*60 / 1e6; // Mm³
+  const catchKm2 = state.catchmentArea / 1e6;
+  // IUH mean
+  const iuh = state.iuh;
+  let meanTT = 0;
+  for(let i=0;i<iuh.length;i++) meanTT += i * dtHr * iuh[i] * state.dt*60;
+
+  document.getElementById('m-area').textContent = catchKm2.toFixed(1);
+  document.getElementById('m-peakq').textContent = peakQ.toFixed(1);
+  document.getElementById('m-tp').textContent = tp.toFixed(1);
+  document.getElementById('m-tt').textContent = meanTT.toFixed(1);
+  // Lag time = centroid of rainfall to centroid of hydrograph
+  let rainCent = 0, rainTot = 0;
+  state.rainfall.forEach((v,i)=>{rainCent+=i*dtHr*v; rainTot+=v;});
+  rainCent = rainTot > 0 ? rainCent/rainTot : 0;
+  document.getElementById('m-lag').textContent = Math.max(0, tp - rainCent).toFixed(1);
+  document.getElementById('m-vol').textContent = totalVol.toFixed(2);
+}
+
+// ---- Render Hydrograph ----
+const hydroCanvas = document.getElementById('hydro-canvas');
+const hydroCtx = hydroCanvas.getContext('2d');
+
+function renderHydrograph() {
+  const W = hydroCanvas.parentElement.clientWidth - 24;
+  const H = hydroCanvas.parentElement.clientHeight - 40;
+  hydroCanvas.width = W; hydroCanvas.height = H;
+
+  hydroCtx.clearRect(0,0,W,H);
+
+  const pad = {l:50, r:20, t:10, b:30};
+  const pw = W - pad.l - pad.r;
+  const ph = H - pad.t - pad.b;
+
+  const Q = state.hydrograph;
+  if (Q.length === 0) {
+    hydroCtx.fillStyle = '#64748b';
+    hydroCtx.font = '11px Space Mono';
+    hydroCtx.textAlign = 'center';
+    hydroCtx.fillText('Select a point on the DEM to generate hydrograph', W/2, H/2);
+    return;
+  }
+
+  const dtHr = state.dt / 60;
+  const maxQ = Math.max(...Q, ...state.observed.map(o=>o.q), 1);
+  const maxT = Q.length * dtHr;
+
+  // Grid lines
+  hydroCtx.strokeStyle = '#1e2d40';
+  hydroCtx.lineWidth = 1;
+  for (let y=0;y<=4;y++) {
+    const py = pad.t + (1-y/4)*ph;
+    hydroCtx.beginPath();
+    hydroCtx.moveTo(pad.l, py); hydroCtx.lineTo(pad.l+pw, py);
+    hydroCtx.stroke();
+    hydroCtx.fillStyle = '#64748b';
+    hydroCtx.font = '9px Space Mono';
+    hydroCtx.textAlign = 'right';
+    hydroCtx.fillText((maxQ*y/4).toFixed(0), pad.l-4, py+3);
+  }
+
+  // Rainfall bars (background, scaled)
+  const maxRain = Math.max(...state.rainfall, 1);
+  hydroCtx.fillStyle = 'rgba(57,255,20,0.12)';
+  state.rainfall.forEach((v,i) => {
+    const x1 = pad.l + (i*dtHr/maxT)*pw;
+    const x2 = pad.l + ((i+1)*dtHr/maxT)*pw;
+    const bh = (v/maxRain)*ph*0.5;
+    hydroCtx.fillRect(x1, pad.t, x2-x1, bh);
+  });
+
+  // Observed Q
+  if (state.observed.length > 0) {
+    hydroCtx.beginPath();
+    hydroCtx.strokeStyle = '#ff6b35';
+    hydroCtx.lineWidth = 1.5;
+    hydroCtx.setLineDash([4,3]);
+    state.observed.forEach((pt,i) => {
+      const x = pad.l + (pt.t/maxT)*pw;
+      const y = pad.t + (1 - pt.q/maxQ)*ph;
+      if(i===0) hydroCtx.moveTo(x,y); else hydroCtx.lineTo(x,y);
+    });
+    hydroCtx.stroke();
+    hydroCtx.setLineDash([]);
+  }
+
+  // Computed Q
+  hydroCtx.beginPath();
+  hydroCtx.strokeStyle = '#00d4ff';
+  hydroCtx.lineWidth = 2;
+  Q.forEach((q,i) => {
+    const x = pad.l + (i*dtHr/maxT)*pw;
+    const y = pad.t + (1 - q/maxQ)*ph;
+    if(i===0) hydroCtx.moveTo(x,y); else hydroCtx.lineTo(x,y);
+  });
+  hydroCtx.stroke();
+
+  // Fill under hydrograph
+  hydroCtx.beginPath();
+  hydroCtx.moveTo(pad.l, pad.t+ph);
+  Q.forEach((q,i) => {
+    const x = pad.l + (i*dtHr/maxT)*pw;
+    const y = pad.t + (1 - q/maxQ)*ph;
+    hydroCtx.lineTo(x,y);
+  });
+  hydroCtx.lineTo(pad.l+(Q.length-1)*dtHr/maxT*pw, pad.t+ph);
+  hydroCtx.closePath();
+  const grad = hydroCtx.createLinearGradient(0,pad.t,0,pad.t+ph);
+  grad.addColorStop(0,'rgba(0,212,255,0.25)');
+  grad.addColorStop(1,'rgba(0,212,255,0)');
+  hydroCtx.fillStyle = grad;
+  hydroCtx.fill();
+
+  // Axes
+  hydroCtx.strokeStyle = '#1e2d40';
+  hydroCtx.lineWidth = 1;
+  hydroCtx.beginPath();
+  hydroCtx.moveTo(pad.l, pad.t); hydroCtx.lineTo(pad.l, pad.t+ph); hydroCtx.lineTo(pad.l+pw, pad.t+ph);
+  hydroCtx.stroke();
+
+  // X axis labels
+  hydroCtx.fillStyle = '#64748b'; hydroCtx.font = '9px Space Mono'; hydroCtx.textAlign = 'center';
+  for (let t=0;t<=maxT;t+=6) {
+    const x = pad.l + (t/maxT)*pw;
+    hydroCtx.fillText(t+'h', x, pad.t+ph+12);
+  }
+
+  // Axis labels
+  hydroCtx.save(); hydroCtx.translate(12, pad.t+ph/2); hydroCtx.rotate(-Math.PI/2);
+  hydroCtx.fillText('Q (m³/s)', 0, 0); hydroCtx.restore();
+}
+
+// ---- Render IUH ----
+const iuhCanvas = document.getElementById('iuh-canvas');
+const iuhCtx = iuhCanvas.getContext('2d');
+function renderIUH() {
+  const W = iuhCanvas.parentElement.clientWidth - 28;
+  const H = 80;
+  iuhCanvas.width = W; iuhCanvas.height = H;
+  iuhCtx.clearRect(0,0,W,H);
+  const iuh = state.iuh;
+  if (!iuh||iuh.length===0) return;
+  const maxV = Math.max(...iuh, 0.000001);
+  const n = iuh.length;
+  iuhCtx.beginPath();
+  iuhCtx.strokeStyle = '#ff6b35';
+  iuhCtx.lineWidth = 1.5;
+  iuh.forEach((v,i) => {
+    const x = (i/n)*W;
+    const y = H - (v/maxV)*(H-10);
+    if(i===0) iuhCtx.moveTo(x,y); else iuhCtx.lineTo(x,y);
+  });
+  iuhCtx.stroke();
+  // Fill
+  iuhCtx.beginPath();
+  iuhCtx.moveTo(0,H);
+  iuh.forEach((v,i)=>{
+    const x=(i/n)*W, y=H-(v/maxV)*(H-10);
+    iuhCtx.lineTo(x,y);
+  });
+  iuhCtx.lineTo(W,H); iuhCtx.closePath();
+  const g=iuhCtx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'rgba(255,107,53,0.35)'); g.addColorStop(1,'rgba(255,107,53,0)');
+  iuhCtx.fillStyle=g; iuhCtx.fill();
+  // label
+  iuhCtx.fillStyle='#64748b'; iuhCtx.font='8px Space Mono';
+  iuhCtx.fillText(`IUH — ${iuh.length} ordinates × ${state.dt}min`, 4, 10);
+}
+
+// ---- Buttons ----
+document.getElementById('btn-gen').addEventListener('click', runPreprocess);
+
+// ---- Window resize ----
+window.addEventListener('resize', () => { if(state.dem) renderDEM(); renderHydrograph(); });
+
+// ---- Auto-run on load ----
+setTimeout(runPreprocess, 200);
+</script>
+</body>
+</html>
